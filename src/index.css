@@ -1,0 +1,189 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 215 36% 4%;
+    --foreground: 188 34% 91%;
+    --card: 211 31% 7%;
+    --card-foreground: 188 34% 91%;
+    --muted: 209 26% 12%;
+    --muted-foreground: 190 13% 58%;
+    --border: 197 29% 18%;
+    --primary: 171 82% 55%;
+    --primary-foreground: 191 65% 6%;
+    --accent: 83 72% 58%;
+    --accent-foreground: 190 64% 7%;
+    --destructive: 0 72% 51%;
+  }
+
+  .theme-light {
+    --background: 36 35% 96%;
+    --foreground: 215 31% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 31% 15%;
+    --muted: 40 24% 91%;
+    --muted-foreground: 215 16% 36%;
+    --border: 36 18% 82%;
+    --primary: 171 78% 30%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 28 92% 56%;
+    --accent-foreground: 215 31% 15%;
+    --destructive: 0 72% 51%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family:
+      "Space Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      linear-gradient(90deg, hsl(171 80% 56% / 0.035) 1px, transparent 1px),
+      linear-gradient(180deg, hsl(171 80% 56% / 0.03) 1px, transparent 1px),
+      radial-gradient(circle at 80% 18%, hsl(171 82% 18% / 0.34), transparent 28rem),
+      radial-gradient(circle at 15% 80%, hsl(83 72% 15% / 0.18), transparent 34rem),
+      linear-gradient(180deg, hsl(215 36% 5%), hsl(215 36% 3%) 46rem);
+    background-size:
+      42px 42px,
+      42px 42px,
+      auto,
+      auto,
+      auto;
+    overflow-x: hidden;
+  }
+
+  .theme-light body {
+    background:
+      linear-gradient(90deg, hsl(171 58% 45% / 0.045) 1px, transparent 1px),
+      linear-gradient(180deg, hsl(171 58% 45% / 0.03) 1px, transparent 1px),
+      radial-gradient(circle at 85% 12%, hsl(171 80% 74% / 0.28), transparent 24rem),
+      radial-gradient(circle at 12% 80%, hsl(29 88% 76% / 0.22), transparent 30rem),
+      linear-gradient(180deg, hsl(38 34% 98%), hsl(35 26% 93%) 54rem);
+  }
+
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+  }
+
+  h1 {
+    font-size: clamp(1.9rem, 6vw, 3rem);
+    line-height: 1.05;
+  }
+
+  h2 {
+    font-size: clamp(1.35rem, 4.8vw, 2.2rem);
+    line-height: 1.1;
+  }
+
+  h3 {
+    font-size: clamp(1.1rem, 4vw, 1.5rem);
+    line-height: 1.15;
+  }
+
+  p,
+  a,
+  button,
+  label,
+  td,
+  th,
+  span {
+    overflow-wrap: anywhere;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.35);
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+
+  * {
+    scrollbar-color: hsl(0 0% 100% / 0.28) hsl(0 0% 100% / 0.06);
+  }
+
+  .theme-light * {
+    scrollbar-color: hsl(171 30% 35% / 0.45) hsl(215 12% 86% / 0.85);
+  }
+
+  *::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: hsl(0 0% 100% / 0.05);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 100% / 0.28);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 100% / 0.4);
+    background-clip: padding-box;
+  }
+
+  .theme-light *::-webkit-scrollbar-track {
+    background: hsl(210 12% 88% / 0.9);
+  }
+
+  .theme-light *::-webkit-scrollbar-thumb {
+    background: hsl(171 28% 36% / 0.45);
+    background-clip: padding-box;
+  }
+
+  .theme-light *::-webkit-scrollbar-thumb:hover {
+    background: hsl(171 34% 30% / 0.6);
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply border bg-card/80 shadow-2xl shadow-cyan-950/20 backdrop-blur-xl;
+  }
+
+  .section-title {
+    @apply relative pl-4 text-2xl font-bold tracking-wide text-foreground;
+  }
+
+  .section-title::before {
+    content: "";
+    @apply absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-accent;
+  }
+
+  table,
+  code,
+  pre {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .media-scrollbar {
+    scrollbar-width: thin;
+  }
+}
