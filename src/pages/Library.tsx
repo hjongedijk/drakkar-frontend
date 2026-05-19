@@ -27,6 +27,16 @@ type LibraryGroup = {
   downloadingCount: number;
 };
 
+function cleanSeriesTitle(value: string) {
+  return value
+    .replace(/\bS\d{1,2}E\d{1,3}\b.*$/i, "")
+    .replace(/\bSeason\s+\d{1,2}\b.*$/i, "")
+    .replace(/\bS\d{1,2}\b(?!E\d).*$/i, "")
+    .replace(/[-_.\s]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const monitorLegend = [
   { label: "Continuing (All episodes downloaded)", classes: "bg-[#5f98ff]" },
   { label: "Ended (All episodes downloaded)", classes: "bg-[#22c55e]" },
@@ -220,7 +230,7 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     groups.set(key, {
       key,
       mediaType: request.mediaType as "movie" | "tv",
-      title: request.title,
+      title: request.mediaType === "tv" ? cleanSeriesTitle(request.title) : request.title,
       year: request.year,
       tmdbId: request.tmdbId,
       tvdbId: request.tvdbId,
@@ -243,7 +253,7 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     const group = groups.get(key) ?? {
       key,
       mediaType: item.mediaType as "movie" | "tv",
-      title: item.title,
+      title: item.mediaType === "tv" ? cleanSeriesTitle(item.title) : item.title,
       year: item.year,
       tmdbId: item.tmdbId,
       tvdbId: item.tvdbId,
@@ -326,10 +336,11 @@ function countRequestedEpisodes(request?: MediaRequest) {
 }
 
 function groupKey(input: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) {
+  const title = input.mediaType === "tv" ? cleanSeriesTitle(input.title) : input.title;
   if (input.imdbId) return `${input.mediaType}:imdb:${input.imdbId}`;
   if (input.tmdbId) return `${input.mediaType}:tmdb:${input.tmdbId}`;
   if (input.tvdbId) return `${input.mediaType}:tvdb:${input.tvdbId}`;
-  return `${input.mediaType}:${normalizeTitle(input.title)}:${input.year ?? ""}`;
+  return `${input.mediaType}:${normalizeTitle(title)}:${input.year ?? ""}`;
 }
 
 function itemKey(item: MediaLibraryItem) {

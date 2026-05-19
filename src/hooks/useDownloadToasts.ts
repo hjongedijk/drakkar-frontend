@@ -5,12 +5,7 @@ import { useToast } from "../components/ToastProvider";
 
 function messageFor(download: Download) {
   const title = shortMediaLabel(download.title);
-  if (download.status === "queued") return `${title} queued.`;
-  if (download.status === "verifying") return `${title} validating release.`;
-  if (download.status === "prepared") return `${title} validated and ready.`;
   if (download.status === "available") return `Added to library: ${title}`;
-  if (download.status === "waiting_for_provider") return `${title} waiting for Usenet provider capacity.`;
-  if (download.status === "failed") return `${title} failed: ${download.error ?? "unknown error"}`;
   return null;
 }
 
@@ -45,8 +40,7 @@ function truncate(value: string, max: number) {
 }
 
 function toneFor(status: string) {
-  if (status === "available" || status === "prepared" || status === "queued") return "success" as const;
-  if (status === "failed") return "error" as const;
+  if (status === "available") return "success" as const;
   return "info" as const;
 }
 
