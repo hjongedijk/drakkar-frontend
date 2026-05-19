@@ -5,10 +5,6 @@ import { Link } from "react-router-dom";
 import { api, type DiscoverMediaItem, type MediaLibraryItem } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 
-type HeroCard = DiscoverMediaItem & {
-  watchGroup?: string;
-};
-
 export function Dashboard() {
   const [heroIndex, setHeroIndex] = useState(0);
   const library = useQuery({ queryKey: ["library"], queryFn: api.library, refetchInterval: 120000 });

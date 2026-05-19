@@ -3,7 +3,6 @@ import { FileCheck2, Pause, Play, RotateCcw, Trash2, Upload, X } from "lucide-re
 import { useState } from "react";
 import { api, type Download as DownloadType } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { useRefreshMutation } from "../hooks/useRefreshMutation";
