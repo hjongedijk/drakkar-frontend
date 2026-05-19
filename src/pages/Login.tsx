@@ -11,8 +11,8 @@ export function LoginPage() {
   const { theme, toggleTheme } = useTheme();
   const { notify } = useToast();
   const navigate = useNavigate();
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("password1234");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && user) return <Navigate to="/dashboard" replace />;
@@ -66,7 +66,7 @@ export function LoginPage() {
         </form>
 
         <div className="rounded-2xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
-          Default login: <span className="font-semibold">admin</span> / <span className="font-semibold">password1234</span>
+          Initial local admin account: <span className="font-semibold">admin</span>. Enter the password manually and change it after first login.
         </div>
       </div>
     </div>

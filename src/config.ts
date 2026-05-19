@@ -8,7 +8,7 @@ declare global {
 }
 
 export const APP_NAME = "Drakkar";
-export const APP_VERSION = "0.1.0";
+export const APP_VERSION = "0.1.1";
 
 export function getApiBaseUrl() {
   return window.__DRAKKAR_CONFIG__?.API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL ?? "";
