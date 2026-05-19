@@ -257,6 +257,18 @@ export type MediaRequest = {
   downloadId?: string | null;
 };
 
+export type RequestSyncResult = {
+  imported: number;
+  failedProviders: number;
+  providerResults: {
+    providerId: string;
+    providerName: string;
+    imported: number;
+    ok: boolean;
+    error?: string;
+  }[];
+};
+
 export type RequestMonitorSeason = {
   seasonNumber: number;
   name?: string;
@@ -638,7 +650,7 @@ export const api = {
     }),
   requests: () => apiRequest<MediaRequest[]>("/api/requests"),
   requestMonitor: (id: string) => apiRequest<RequestMonitor>(`/api/requests/${id}/monitor`),
-  syncRequests: () => apiRequest<{ imported: number }>("/api/requests/sync", { method: "POST", body: "{}" }),
+  syncRequests: () => apiRequest<RequestSyncResult>("/api/requests/sync", { method: "POST", body: "{}" }),
   approveRequest: (id: string) => apiRequest<MediaRequest>(`/api/requests/${id}/approve`, { method: "POST" }),
   rejectRequest: (id: string) => apiRequest<MediaRequest>(`/api/requests/${id}/reject`, { method: "POST" }),
   searchRequest: (id: string) => apiRequest<{ releases: RequestReleaseCandidate[] }>(`/api/requests/${id}/search`, { method: "POST" }),
@@ -686,7 +698,7 @@ export const api = {
   updateRequestProvider: (id: string, provider: Partial<RequestProviderInput>) =>
     apiRequest<RequestProvider>(`/api/request-providers/${id}`, { method: "PUT", body: JSON.stringify(provider) }),
   deleteRequestProvider: (id: string) => apiRequest<RequestProvider>(`/api/request-providers/${id}`, { method: "DELETE" }),
-  testRequestProvider: (id: string) => apiRequest<{ ok: boolean; message?: string }>(`/api/request-providers/${id}/test`, { method: "POST" }),
+  testRequestProvider: (id: string) => apiRequest<{ ok: boolean; status: number; endpoint: string; message?: string }>(`/api/request-providers/${id}/test`, { method: "POST" }),
   usenetServers: () => apiRequest<UsenetServer[]>("/api/usenet/servers"),
   createUsenetServer: (server: UsenetServerInput) =>
     apiRequest<UsenetServer>("/api/usenet/servers", { method: "POST", body: JSON.stringify(server) }),

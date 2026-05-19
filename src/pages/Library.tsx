@@ -53,10 +53,20 @@ export function Library() {
   const requests = useQuery({ queryKey: ["requests"], queryFn: api.requests, refetchInterval: 30000 });
   const syncRequests = useMutation({
     mutationFn: api.syncRequests,
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["requests"] });
       void queryClient.invalidateQueries({ queryKey: ["library"] });
-      notify("Requests synced.", "success");
+      const failed = result.providerResults.filter((item) => !item.ok);
+      if (result.imported > 0) {
+        const suffix = failed.length > 0 ? ` ${failed.length} provider failed.` : "";
+        notify(`Imported ${result.imported} request${result.imported === 1 ? "" : "s"}.${suffix}`, failed.length > 0 ? "info" : "success");
+        return;
+      }
+      if (failed.length > 0) {
+        notify(failed[0]?.error ?? "Request sync failed.", "error");
+        return;
+      }
+      notify("No new requests found.", "info");
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Request sync failed.", "error")
   });

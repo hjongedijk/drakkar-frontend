@@ -395,6 +395,7 @@ export function Settings() {
             <p>Working NZBs: <span className="font-mono text-foreground">/data/nzb</span></p>
             <p>Optional NZB backups: <span className="font-mono text-foreground">/data/nzb-backup</span></p>
             <p>Plex / media clients: <span className="font-mono text-foreground">/mnt/media</span></p>
+            <p>FUSE mountpoint: <span className="font-mono text-foreground">/mnt/fuse</span></p>
           </div>
         </SettingsCard>
         <SettingsCard title="Redis / PostgreSQL" tab="system" activeTab={settingsTab}>
@@ -534,7 +535,7 @@ export function Settings() {
           </div>
         </SettingsCard>
         <SettingsCard title="FUSE / SAB API" tab="system" activeTab={settingsTab}>
-          <p className="text-sm text-muted-foreground">Drakkar mounts media through FUSE at <span className="font-mono text-foreground">/mnt</span>. SAB compatibility stays available for tools that push NZBs.</p>
+          <p className="text-sm text-muted-foreground">Drakkar mounts releases through FUSE at <span className="font-mono text-foreground">/mnt/fuse</span>, while Plex/library files live at <span className="font-mono text-foreground">/mnt/media</span>. SAB compatibility stays available for tools that push NZBs.</p>
         </SettingsCard>
       </section>
     </div>
