@@ -559,11 +559,11 @@ export function Settings() {
         </SettingsCard>
         <SettingsCard title="Queue Management" tab="queue" activeTab={settingsTab}>
           <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
-            Download connection caps auto-sync from enabled Usenet providers. Example: 2 providers x 4 connections = 8 total. Disable one provider and caps drop automatically.
+            Max total connections auto-syncs from enabled Usenet providers. Example: 2 providers x 4 connections = 8 total. Download and streaming limits share that total budget.
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput label="Streaming priority" type="number" value={String(policyDraft.streamingPriority)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamingPriority: Number(value) })} />
-            <LabeledInput label="Max download connections" type="number" value={String(policyDraft.maxDownloadConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxDownloadConnections: Number(value) })} disabled />
+            <LabeledInput label="Max download connections" type="number" value={String(policyDraft.maxDownloadConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxDownloadConnections: Number(value) })} />
             <LabeledInput label="Max streaming connections" type="number" value={String(policyDraft.maxStreamingConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxStreamingConnections: Number(value) })} />
             <LabeledInput label="Max total connections" type="number" value={String(policyDraft.maxTotalUsenetConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxTotalUsenetConnections: Number(value) })} disabled />
             <LabeledInput label="Stream chunk bytes" type="number" value={String(policyDraft.streamChunkSizeBytes)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamChunkSizeBytes: Number(value) })} />
