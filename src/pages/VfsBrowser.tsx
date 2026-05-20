@@ -63,7 +63,33 @@ export function VfsBrowser() {
           {nodes.isError && <ErrorState message="Could not list VFS path." />}
           {nodes.data && nodes.data.length === 0 && <EmptyState message="This folder is empty." />}
           {nodes.data && nodes.data.length > 0 && (
-            <div className="overflow-x-auto rounded-lg border bg-card">
+            <>
+            <div className="space-y-3 md:hidden">
+              {parentPath(path) ? (
+                <button className="flex w-full items-center gap-2 rounded-lg border bg-card px-3 py-3 text-left font-medium" onClick={() => setPath(parentPath(path) ?? "/")}>
+                  <Folder className="h-4 w-4 text-primary" />
+                  ..
+                </button>
+              ) : null}
+              {nodes.data.map((node) => (
+                <div key={node.path} className="rounded-lg border bg-card p-4">
+                  <button className="flex w-full items-center gap-2 text-left font-medium" onClick={() => isFolderLike(node.type) && setPath(node.path)}>
+                    {isFolderLike(node.type) ? <Folder className="h-4 w-4 text-primary" /> : <File className="h-4 w-4 text-muted-foreground" />}
+                    <span className="break-words">{node.name}</span>
+                  </button>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    <Badge>{node.type}</Badge>
+                    <Badge>{node.status ?? (node.type === "archive-file" ? "requires_extract" : "ready")}</Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{node.type === "folder" ? "-" : formatBytes(node.size)}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="ghost" size="icon" title="Copy VFS path" onClick={() => navigator.clipboard?.writeText(node.path).then(() => notify("VFS path copied.", "success"))}><Copy className="h-4 w-4" /></Button>
+                    {!isFolderLike(node.type) && node.type !== "archive-file" && <Button variant="outline" asChild><a href={apiUrl(`/api/vfs/stream?path=${encodeURIComponent(node.path)}`)}>Open</a></Button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
               <table className="min-w-[700px] w-full text-left text-sm">
                 <thead className="border-b text-xs text-muted-foreground"><tr><th className="p-3">Name</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3">Size</th><th className="p-3 text-right">Actions</th></tr></thead>
                 <tbody>
@@ -101,6 +127,7 @@ export function VfsBrowser() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </div>
@@ -123,11 +150,29 @@ export function VfsBrowser() {
           <p className="text-sm text-muted-foreground">{streams.data?.length ?? 0} current stream sessions.</p>
         </div>
       </section>
-      <div className="overflow-x-auto rounded-lg border bg-card">
+      <div className="rounded-lg border bg-card">
         <div className="border-b p-3">
           <h2 className="text-sm font-semibold">Active streams</h2>
         </div>
         {streams.data && streams.data.length > 0 ? (
+          <>
+          <div className="space-y-3 p-3 md:hidden">
+            {streams.data.map((stream) => (
+              <div key={stream.id} className="rounded-lg border bg-background/40 p-3">
+                <div className="break-all text-sm font-medium">{stream.path}</div>
+                <div className="mt-3 flex flex-wrap gap-1">
+                  <Badge>{stream.status}</Badge>
+                  <Badge>{stream.source ?? "fuse"}</Badge>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">{stream.range || `${stream.start}-${stream.end}`}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{formatBytes(stream.bytesSent)}</p>
+                <div className="mt-3">
+                  <Button variant="ghost" size="icon" title="Stop stream" onClick={() => stopStream.mutate(stream.id)}><Square className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
           <table className="min-w-[900px] w-full text-left text-sm">
             <thead className="border-b text-xs text-muted-foreground">
               <tr><th className="p-3">Path</th><th className="p-3">Status</th><th className="p-3">Source</th><th className="p-3">Range</th><th className="p-3">Sent</th><th className="p-3 text-right">Actions</th></tr>
@@ -147,6 +192,8 @@ export function VfsBrowser() {
               ))}
             </tbody>
           </table>
+          </div>
+          </>
         ) : <p className="p-3 text-sm text-muted-foreground">No mounted NZB streams are active.</p>}
         {metrics.data ? (
           <div className="grid gap-3 border-t p-3 text-sm md:grid-cols-4">

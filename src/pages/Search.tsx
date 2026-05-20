@@ -106,7 +106,32 @@ export function SearchPage() {
       {nzbTestResult ? <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">{nzbTestResult}</div> : null}
       {!search.data && <EmptyState message="Search results will appear here." />}
       {search.data && (
-        <div className="overflow-x-auto rounded-lg border bg-card">
+        <>
+        <div className="space-y-3 md:hidden">
+          {search.data.map((release) => (
+            <div key={release.guid} className="rounded-lg border bg-card p-4">
+              <p className="break-words text-sm font-medium">{release.title}</p>
+              <div className="mt-3 flex flex-wrap gap-1">
+                <Badge>{release.resolution ?? "unknown"}</Badge>
+                <Badge>{release.source ?? "unknown"}</Badge>
+                <Badge>{release.codec ?? "unknown"}</Badge>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">{release.indexer}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="ghost" size="icon" title="Download and validate NZB" onClick={() => { notify("Testing NZB...", "info"); testNzb.mutate(release); }} disabled={!release.downloadUrl || testNzb.isPending}>
+                  <FileCheck2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" title="Download NZB file" onClick={() => { notify("Downloading NZB file...", "info"); downloadNzb.mutate(release); }} disabled={!release.downloadUrl || downloadNzb.isPending}>
+                  <FileDown className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" title="Grab release" onClick={() => { notify("Adding release to queue...", "info"); download.mutate(release); }} disabled={!release.downloadUrl || download.isPending}>
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
           <table className="min-w-[860px] w-full text-left text-sm">
             <thead className="border-b text-xs text-muted-foreground">
               <tr>
@@ -142,6 +167,7 @@ export function SearchPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

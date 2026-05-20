@@ -90,14 +90,14 @@ export function DetailsPage() {
             </div>
             <h1 className="text-4xl font-bold md:text-5xl">{details.title}</h1>
             {details.overview ? <p className="max-w-3xl text-sm text-white/75 md:text-base">{details.overview}</p> : null}
-            <div className="flex flex-wrap gap-3">
-              <Button asChild variant="outline" disabled={details.availableItems.length === 0}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Button className="w-full sm:w-auto" asChild variant="outline" disabled={details.availableItems.length === 0}>
                 <Link to={watchLink}>
                   <Eye className="mr-2 h-4 w-4" />
                   Watch
                 </Link>
               </Button>
-              <Button asChild>
+              <Button className="w-full sm:w-auto" asChild>
                 <Link to="/library">Open Library</Link>
               </Button>
             </div>

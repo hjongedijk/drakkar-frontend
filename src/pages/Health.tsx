@@ -61,7 +61,23 @@ export function HealthPage() {
         {schedule.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground">No items queued for health checks yet.</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="space-y-3 p-4 md:hidden">
+            {schedule.slice(0, 10).map((item) => (
+              <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                <div className="font-semibold break-words">{item.name}</div>
+                <div className="mt-1 break-all text-xs text-muted-foreground">{item.path}</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {badge(formatDate(item.createdAt, "Unknown"), "info")}
+                  {badge(formatDate(item.lastCheckAt, "Never"), "warning")}
+                  {item.progress > 0
+                    ? progressBadge(item.progress)
+                    : badge(formatDate(item.nextCheckAt, "ASAP"), item.lastCheckAt ? "success" : "warning")}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-[980px] w-full text-left text-sm">
               <thead className="border-b text-xs uppercase tracking-[0.2em] text-muted-foreground">
                 <tr>
@@ -90,6 +106,7 @@ export function HealthPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>
