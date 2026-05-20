@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree, Library, PlugZap, Plus, Save, Settings2, ShieldAlert, Trash2, Wifi } from "lucide-react";
+import { FolderTree, Library, Pencil, PlugZap, Plus, Save, Settings2, ShieldAlert, Trash2, Wifi, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
-import { api, type RequestProviderInput, type Settings as SettingsType, type UsenetServerInput } from "../api/client";
+import { api, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -87,6 +87,8 @@ export function Settings() {
   const [draft, setDraft] = useState<SettingsType | null>(null);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("integrations");
   const [policyDraft, setPolicyDraft] = useState<Awaited<ReturnType<typeof api.policies>> | null>(null);
+  const [editingUsenetId, setEditingUsenetId] = useState<string | null>(null);
+  const [editingUsenet, setEditingUsenet] = useState<UsenetServerInput | null>(null);
   const [namingDraft, setNamingDraft] = useState<Awaited<ReturnType<typeof api.naming>> | null>(null);
   const [namingPreview, setNamingPreview] = useState<Awaited<ReturnType<typeof api.previewNaming>> | null>(null);
   const [ignoredDraft, setIgnoredDraft] = useState("");
@@ -197,9 +199,11 @@ export function Settings() {
     onError: (error) => notify(error instanceof Error ? error.message : "Could not add Usenet provider")
   });
   const updateUsenet = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.updateUsenetServer(id, { enabled }),
+    mutationFn: ({ id, data }: { id: string; data: Partial<UsenetServerInput> }) => api.updateUsenetServer(id, data),
     onSuccess: () => {
       notify("Usenet provider updated");
+      setEditingUsenetId(null);
+      setEditingUsenet(null);
       queryClient.invalidateQueries({ queryKey: ["usenet"] });
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not update Usenet provider")
@@ -259,6 +263,23 @@ export function Settings() {
   useEffect(() => {
     if (naming.data) setNamingDraft(naming.data);
   }, [naming.data]);
+
+  function beginEditUsenet(server: UsenetServer) {
+    setEditingUsenetId(server.id);
+    setEditingUsenet({
+      name: server.name,
+      host: server.host,
+      port: server.port,
+      ssl: server.ssl,
+      username: server.username ?? "",
+      password: "",
+      connections: server.connections,
+      priority: server.priority,
+      enabled: server.enabled,
+      isBackup: server.isBackup,
+      retentionDays: server.retentionDays ?? undefined
+    });
+  }
   useEffect(() => {
     if (user) setProfileDraft({ username: user.username, displayName: user.displayName });
   }, [user]);
@@ -364,20 +385,52 @@ export function Settings() {
         <SettingsCard title="Usenet Providers" tab="providers" activeTab={settingsTab}>
           <div className="space-y-2">
             {(usenet.data ?? []).map((server) => (
-              <div key={server.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{server.name}</p>
-                    <Badge>{server.ssl ? "SSL" : "plain"}</Badge>
-                    <Badge>{server.enabled ? "enabled" : "disabled"}</Badge>
-                    {server.isBackup ? <Badge>backup</Badge> : null}
+              <div key={server.id} className="space-y-3 rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium">{server.name}</p>
+                      <Badge>{server.ssl ? "SSL" : "plain"}</Badge>
+                      <Badge>{server.enabled ? "enabled" : "disabled"}</Badge>
+                      {server.isBackup ? <Badge>backup</Badge> : null}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">{server.host}:{server.port} · {server.connections} connections · priority {server.priority}</p>
                   </div>
-                  <p className="truncate text-xs text-muted-foreground">{server.host}:{server.port} · {server.connections} connections · priority {server.priority}</p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="icon" title="Edit provider" onClick={() => beginEditUsenet(server)}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="outline" onClick={() => updateUsenet.mutate({ id: server.id, data: { enabled: !server.enabled } })}>{server.enabled ? "Disable" : "Enable"}</Button>
+                    <Button variant="ghost" size="icon" title="Delete provider" onClick={() => deleteUsenet.mutate(server.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button variant="outline" onClick={() => updateUsenet.mutate({ id: server.id, enabled: !server.enabled })}>{server.enabled ? "Disable" : "Enable"}</Button>
-                  <Button variant="ghost" size="icon" title="Delete provider" onClick={() => deleteUsenet.mutate(server.id)}><Trash2 className="h-4 w-4" /></Button>
-                </div>
+                {editingUsenetId === server.id && editingUsenet ? (
+                  <>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <LabeledInput label="Name" value={editingUsenet.name} onChange={(value) => setEditingUsenet({ ...editingUsenet, name: value })} />
+                      <LabeledInput label="Host" value={editingUsenet.host} onChange={(value) => setEditingUsenet({ ...editingUsenet, host: value })} />
+                      <LabeledInput label="Port" type="number" value={String(editingUsenet.port)} onChange={(value) => setEditingUsenet({ ...editingUsenet, port: Number(value) })} />
+                      <LabeledInput label="Connections" type="number" value={String(editingUsenet.connections)} onChange={(value) => setEditingUsenet({ ...editingUsenet, connections: Number(value) })} />
+                      <LabeledInput label="Username" value={editingUsenet.username ?? ""} onChange={(value) => setEditingUsenet({ ...editingUsenet, username: value })} />
+                      <LabeledInput label="Password" type="password" value={editingUsenet.password ?? ""} onChange={(value) => setEditingUsenet({ ...editingUsenet, password: value })} />
+                      <LabeledInput label="Priority" type="number" value={String(editingUsenet.priority)} onChange={(value) => setEditingUsenet({ ...editingUsenet, priority: Number(value) })} />
+                      <LabeledInput label="Retention days" type="number" value={editingUsenet.retentionDays ? String(editingUsenet.retentionDays) : ""} onChange={(value) => setEditingUsenet({ ...editingUsenet, retentionDays: value ? Number(value) : undefined })} />
+                      <CheckboxLabel label="SSL" checked={editingUsenet.ssl} onChange={(checked) => setEditingUsenet({ ...editingUsenet, ssl: checked })} />
+                      <CheckboxLabel label="Enabled" checked={editingUsenet.enabled} onChange={(checked) => setEditingUsenet({ ...editingUsenet, enabled: checked })} />
+                      <CheckboxLabel label="Backup server" checked={editingUsenet.isBackup} onChange={(checked) => setEditingUsenet({ ...editingUsenet, isBackup: checked })} />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => updateUsenet.mutate({ id: server.id, data: cleanUsenetServer(editingUsenet) })}
+                        disabled={!editingUsenet.name.trim() || !editingUsenet.host.trim() || updateUsenet.isPending}
+                      >
+                        <Save className="mr-2 h-4 w-4" />Save provider
+                      </Button>
+                      <Button variant="outline" onClick={() => { setEditingUsenetId(null); setEditingUsenet(null); }}>
+                        <X className="mr-2 h-4 w-4" />Cancel
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Leave password blank to keep existing password.</p>
+                  </>
+                ) : null}
               </div>
             ))}
           </div>
