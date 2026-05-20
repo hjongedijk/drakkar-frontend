@@ -15,9 +15,18 @@ export function Profiles() {
   const { notify } = useToast();
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const create = useMutation({
-    mutationFn: () => apiRequest<QualityProfile>("/api/profiles", {
+    mutationFn: (input?: Partial<QualityProfile>) => apiRequest<QualityProfile>("/api/profiles", {
       method: "POST",
-      body: JSON.stringify({ name: `Custom ${Date.now()}`, allowedQualities: ["1080p"], preferredWords: [], rejectedWords: [], requiredWords: [], preferredLanguages: [], requiredLanguages: [] })
+      body: JSON.stringify({
+        name: input?.name ?? `Custom ${Date.now()}`,
+        allowedQualities: input?.allowedQualities ?? ["1080p"],
+        cutoffQuality: input?.cutoffQuality ?? undefined,
+        preferredWords: input?.preferredWords ?? [],
+        rejectedWords: input?.rejectedWords ?? [],
+        requiredWords: input?.requiredWords ?? [],
+        preferredLanguages: input?.preferredLanguages ?? [],
+        requiredLanguages: input?.requiredLanguages ?? []
+      })
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
@@ -51,7 +60,7 @@ export function Profiles() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Profiles</h1>
-          <Button size="icon" onClick={() => create.mutate()}><Plus className="h-4 w-4" /></Button>
+          <Button size="icon" onClick={() => create.mutate(undefined)}><Plus className="h-4 w-4" /></Button>
         </div>
         {(profiles.data ?? []).map((profile) => (
           <button key={profile.id} className="block w-full rounded-lg border bg-card p-4 text-left hover:bg-muted" onClick={() => setSelected(profile)}>
@@ -70,7 +79,18 @@ export function Profiles() {
                 <p className="mt-1 text-sm text-muted-foreground">Cutoff: {selected.cutoffQuality ?? "none"}</p>
               </div>
               <div className="flex gap-1">
-                <Button variant="ghost" size="icon" onClick={() => create.mutate()}><Copy className="h-4 w-4" /></Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    create.mutate({
+                      ...selected,
+                      name: `${selected.name} Copy`
+                    })
+                  }
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => remove.mutate(selected.id)}><Trash2 className="h-4 w-4" /></Button>
               </div>
             </div>

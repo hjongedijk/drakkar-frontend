@@ -51,6 +51,10 @@ export async function downloadBlob(path: string, init: RequestInit = {}) {
   };
 }
 
+export function downloadFileUrl(path: string) {
+  return apiUrl(path);
+}
+
 function filenameFromDisposition(disposition: string | null) {
   const match = disposition?.match(/filename="?([^"]+)"?/i);
   return match?.[1] ?? "release.nzb";
@@ -684,6 +688,7 @@ export const api = {
   repair: (id: string) => apiRequest<RepairJob>(`/api/repair/${id}`, { method: "POST" }),
   repairJobs: () => apiRequest<RepairJob[]>("/api/repair/jobs"),
   logs: () => apiRequest<LogEvent[]>("/api/logs"),
+  logsDownloadUrl: () => downloadFileUrl("/api/logs/download"),
   vfsList: (path: string) => apiRequest<VfsNode[]>(`/api/vfs/list?path=${encodeURIComponent(path)}`),
   vfsTree: (path = "/", depth = 4) => apiRequest<VfsTreeNode>(`/api/vfs/tree?path=${encodeURIComponent(path)}&depth=${depth}`),
   streamSessions: () => apiRequest<StreamSession[]>("/api/vfs/streams"),

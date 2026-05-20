@@ -25,7 +25,12 @@ export function Logs() {
           <h1 className="text-2xl font-semibold">Logs</h1>
           <p className="mt-1 text-sm text-muted-foreground">Operational events assembled from backend job state.</p>
         </div>
-        <Button className="w-full sm:w-auto" variant="outline"><Download className="mr-2 h-4 w-4" />Download</Button>
+        <Button className="w-full sm:w-auto" variant="outline" asChild>
+          <a href={api.logsDownloadUrl()} download>
+            <Download className="mr-2 h-4 w-4" />
+            Download
+          </a>
+        </Button>
       </div>
       <div className="grid gap-2 md:grid-cols-[160px_1fr]">
         <Select value={level} onChange={(event) => setLevel(event.target.value)}>
