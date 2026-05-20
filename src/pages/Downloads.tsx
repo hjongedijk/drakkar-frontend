@@ -41,6 +41,7 @@ export function Downloads() {
         <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:grid-flow-col">
           <Input className="w-full sm:w-72" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="NZB URL" />
           <Button
+            className="w-full sm:w-auto"
             variant="outline"
             onClick={() => {
               notify("Testing NZB URL...", "info");
@@ -56,12 +57,12 @@ export function Downloads() {
             }}
             disabled={!url}
           >
-            <FileCheck2 className="mr-2 h-4 w-4" />Test
+            <FileCheck2 className="h-4 w-4 sm:mr-2" /><span className="sr-only sm:not-sr-only">Test</span>
           </Button>
-          <Button onClick={() => { notify("Adding NZB URL to queue...", "info"); addUrl.mutate(url); setUrl(""); }} disabled={!url || addUrl.isPending}>{addUrl.isPending ? "Adding..." : "Add"}</Button>
-          <Button asChild variant="outline">
+          <Button className="w-full sm:w-auto" onClick={() => { notify("Adding NZB URL to queue...", "info"); addUrl.mutate(url); setUrl(""); }} disabled={!url || addUrl.isPending}>{addUrl.isPending ? "Adding..." : "Add"}</Button>
+          <Button className="w-full sm:w-auto" asChild variant="outline">
             <label>
-              <Upload className="mr-2 h-4 w-4" />NZB
+              <Upload className="h-4 w-4 sm:mr-2" /><span className="sr-only sm:not-sr-only">NZB</span>
               <input
                 className="hidden"
                 type="file"
@@ -87,7 +88,7 @@ export function Downloads() {
       {urlTestResult ? <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">{urlTestResult}</div> : null}
       {uploadStatus ? <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">{uploadStatus}</div> : null}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(["queue", "history"] as const).map((item) => (
           <Button key={item} variant={tab === item ? "default" : "outline"} onClick={() => setTab(item)}>{item}</Button>
         ))}
@@ -160,9 +161,9 @@ function DownloadRow({ download, onPause, onResume, onCancel, onRetry, onMakeAva
       <div className="mt-4 h-2 overflow-hidden rounded bg-muted">
         <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
       </div>
-      <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+      <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-between sm:gap-2">
         <span>{download.statusLabel ?? statusText(download.status)}</span>
-        <span>{pct.toFixed(pct < 10 ? 1 : 0)}% · {formatBytes(download.downloaded)} / {formatBytes(download.size)} · {formatBytes(download.speedBytesSec)}/s · {download.etaSeconds ?? "-"}s ETA</span>
+        <span className="break-words">{pct.toFixed(pct < 10 ? 1 : 0)}% · {formatBytes(download.downloaded)} / {formatBytes(download.size)} · {formatBytes(download.speedBytesSec)}/s · {download.etaSeconds ?? "-"}s ETA</span>
       </div>
       {download.error ? <p className="mt-2 text-xs text-destructive">{download.error}</p> : null}
     </div>

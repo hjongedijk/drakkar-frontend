@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Save, Trash2, Wifi } from "lucide-react";
+import { FolderTree, Library, PlugZap, Plus, Save, Settings2, ShieldAlert, Trash2, Wifi } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
@@ -61,6 +61,15 @@ const queueDecisionLabels = {
   remove_blocklist_and_search: "Remove, Blocklist, and Search",
   search_again: "Search Again"
 } as const;
+
+const settingsTabs: Array<{ value: SettingsTab; label: string; short: string; icon: typeof PlugZap }> = [
+  { value: "integrations", label: "Integrations", short: "Apps", icon: PlugZap },
+  { value: "providers", label: "Providers", short: "Feeds", icon: Wifi },
+  { value: "queue", label: "Queue", short: "Queue", icon: Settings2 },
+  { value: "library", label: "Library", short: "Names", icon: Library },
+  { value: "rules", label: "Rules", short: "Rules", icon: ShieldAlert },
+  { value: "system", label: "System", short: "System", icon: FolderTree }
+];
 
 export function Settings() {
   const queryClient = useQueryClient();
@@ -269,17 +278,18 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto rounded-2xl border bg-card p-2">
-        {[
-          ["integrations", "Integrations"],
-          ["providers", "Providers"],
-          ["queue", "Queue"],
-          ["library", "Library"],
-          ["rules", "Rules"],
-          ["system", "System"]
-        ].map(([value, label]) => (
-          <Button key={value} variant={settingsTab === value ? "default" : "ghost"} onClick={() => setSettingsTab(value as SettingsTab)}>
-            {label}
+      <div className="grid grid-cols-3 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-6">
+        {settingsTabs.map((tab) => (
+          <Button
+            key={tab.value}
+            className="h-auto min-w-0 flex-col gap-1 px-2 py-2 text-[11px] sm:text-sm"
+            variant={settingsTab === tab.value ? "default" : "ghost"}
+            onClick={() => setSettingsTab(tab.value)}
+            title={tab.label}
+          >
+            <tab.icon className="h-4 w-4" />
+            <span className="truncate sm:hidden">{tab.short}</span>
+            <span className="hidden sm:inline">{tab.label}</span>
           </Button>
         ))}
       </div>
