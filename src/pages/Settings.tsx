@@ -3,7 +3,7 @@ import { FolderTree, Library, Pencil, PlugZap, Plus, Save, Settings2, ShieldAler
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
-import { api, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
+import { api, type RequestProvider, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -87,6 +87,8 @@ export function Settings() {
   const [draft, setDraft] = useState<SettingsType | null>(null);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("integrations");
   const [policyDraft, setPolicyDraft] = useState<Awaited<ReturnType<typeof api.policies>> | null>(null);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [editingProvider, setEditingProvider] = useState<RequestProviderInput | null>(null);
   const [editingUsenetId, setEditingUsenetId] = useState<string | null>(null);
   const [editingUsenet, setEditingUsenet] = useState<UsenetServerInput | null>(null);
   const [namingDraft, setNamingDraft] = useState<Awaited<ReturnType<typeof api.naming>> | null>(null);
@@ -169,9 +171,11 @@ export function Settings() {
     onError: (error) => notify(error instanceof Error ? error.message : "Could not add Seerr provider")
   });
   const updateProvider = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.updateRequestProvider(id, { enabled }),
+    mutationFn: ({ id, data }: { id: string; data: Partial<RequestProviderInput> }) => api.updateRequestProvider(id, data),
     onSuccess: () => {
       notify("Seerr provider updated");
+      setEditingProviderId(null);
+      setEditingProvider(null);
       queryClient.invalidateQueries({ queryKey: ["request-providers"] });
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not update Seerr provider")
@@ -280,6 +284,20 @@ export function Settings() {
       retentionDays: server.retentionDays ?? undefined
     });
   }
+
+  function beginEditProvider(provider: RequestProvider) {
+    setEditingProviderId(provider.id);
+    setEditingProvider({
+      type: provider.type,
+      name: provider.name,
+      baseUrl: provider.baseUrl,
+      apiKey: "",
+      enabled: provider.enabled,
+      syncIntervalMinutes: provider.syncIntervalMinutes,
+      defaultMovieProfile: provider.defaultMovieProfile ?? undefined,
+      defaultTvProfile: provider.defaultTvProfile ?? undefined
+    });
+  }
   useEffect(() => {
     if (user) setProfileDraft({ username: user.username, displayName: user.displayName });
   }, [user]);
@@ -336,21 +354,55 @@ export function Settings() {
         <SettingsCard title="Seerr" tab="providers" activeTab={settingsTab}>
           <div className="space-y-2">
             {(providers.data ?? []).map((provider) => (
-              <div key={provider.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{provider.name}</p>
-                    <Badge>{provider.type}</Badge>
-                    <Badge>{provider.enabled ? "enabled" : "disabled"}</Badge>
+              <div key={provider.id} className="space-y-3 rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium">{provider.name}</p>
+                      <Badge>{provider.type}</Badge>
+                      <Badge>{provider.enabled ? "enabled" : "disabled"}</Badge>
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">{provider.baseUrl}</p>
+                    {provider.lastError ? <p className="text-xs text-destructive">{provider.lastError}</p> : null}
                   </div>
-                  <p className="truncate text-xs text-muted-foreground">{provider.baseUrl}</p>
-                  {provider.lastError ? <p className="text-xs text-destructive">{provider.lastError}</p> : null}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="icon" title="Test provider" onClick={() => testProvider.mutate(provider.id)}><Wifi className="h-4 w-4" /></Button>
+                    <Button variant="outline" onClick={() => beginEditProvider(provider)}><Pencil className="mr-2 h-4 w-4" />Edit</Button>
+                    <Button variant="outline" onClick={() => updateProvider.mutate({ id: provider.id, data: { enabled: !provider.enabled } })}>{provider.enabled ? "Disable" : "Enable"}</Button>
+                    <Button variant="ghost" size="icon" title="Delete provider" onClick={() => deleteProvider.mutate(provider.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button variant="outline" size="icon" title="Test provider" onClick={() => testProvider.mutate(provider.id)}><Wifi className="h-4 w-4" /></Button>
-                  <Button variant="outline" onClick={() => updateProvider.mutate({ id: provider.id, enabled: !provider.enabled })}>{provider.enabled ? "Disable" : "Enable"}</Button>
-                  <Button variant="ghost" size="icon" title="Delete provider" onClick={() => deleteProvider.mutate(provider.id)}><Trash2 className="h-4 w-4" /></Button>
-                </div>
+                {editingProviderId === provider.id && editingProvider ? (
+                  <>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <LabeledInput label="Name" value={editingProvider.name} onChange={(value) => setEditingProvider({ ...editingProvider, name: value })} />
+                      <LabeledInput label="URL" value={editingProvider.baseUrl} onChange={(value) => setEditingProvider({ ...editingProvider, baseUrl: value })} />
+                      <LabeledInput label="API key" value={editingProvider.apiKey} onChange={(value) => setEditingProvider({ ...editingProvider, apiKey: value })} />
+                      <LabeledInput label="Sync minutes" type="number" value={String(editingProvider.syncIntervalMinutes)} onChange={(value) => setEditingProvider({ ...editingProvider, syncIntervalMinutes: Number(value) })} />
+                      <LabeledSelect label="Movie profile" value={editingProvider.defaultMovieProfile ?? ""} onChange={(value) => setEditingProvider({ ...editingProvider, defaultMovieProfile: value || undefined })}>
+                        <option value="">Use global default</option>
+                        {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                      </LabeledSelect>
+                      <LabeledSelect label="TV profile" value={editingProvider.defaultTvProfile ?? ""} onChange={(value) => setEditingProvider({ ...editingProvider, defaultTvProfile: value || undefined })}>
+                        <option value="">Use global default</option>
+                        {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                      </LabeledSelect>
+                      <CheckboxLabel label="Enabled" checked={editingProvider.enabled} onChange={(checked) => setEditingProvider({ ...editingProvider, enabled: checked })} />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => updateProvider.mutate({ id: provider.id, data: cleanRequestProviderUpdate(editingProvider) })}
+                        disabled={!editingProvider.name.trim() || !editingProvider.baseUrl.trim() || updateProvider.isPending}
+                      >
+                        <Save className="mr-2 h-4 w-4" />Save provider
+                      </Button>
+                      <Button variant="outline" onClick={() => { setEditingProviderId(null); setEditingProvider(null); }}>
+                        <X className="mr-2 h-4 w-4" />Cancel
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Leave API key blank to keep existing key.</p>
+                  </>
+                ) : null}
               </div>
             ))}
             {testResult ? <p className="text-xs text-muted-foreground">{testResult}</p> : null}
@@ -397,7 +449,7 @@ export function Settings() {
                     <p className="truncate text-xs text-muted-foreground">{server.host}:{server.port} · {server.connections} connections · priority {server.priority}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Button variant="outline" size="icon" title="Edit provider" onClick={() => beginEditUsenet(server)}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="outline" onClick={() => beginEditUsenet(server)}><Pencil className="mr-2 h-4 w-4" />Edit</Button>
                     <Button variant="outline" onClick={() => updateUsenet.mutate({ id: server.id, data: { enabled: !server.enabled } })}>{server.enabled ? "Disable" : "Enable"}</Button>
                     <Button variant="ghost" size="icon" title="Delete provider" onClick={() => deleteUsenet.mutate(server.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
@@ -634,6 +686,13 @@ function cleanRequestProvider(provider: RequestProviderInput) {
     defaultMovieProfile: provider.defaultMovieProfile || undefined,
     defaultTvProfile: provider.defaultTvProfile || undefined,
     syncIntervalMinutes: Math.max(1, Number(provider.syncIntervalMinutes) || 15)
+  };
+}
+
+function cleanRequestProviderUpdate(provider: RequestProviderInput): Partial<RequestProviderInput> {
+  return {
+    ...cleanRequestProvider(provider),
+    apiKey: provider.apiKey.trim() || undefined
   };
 }
 
