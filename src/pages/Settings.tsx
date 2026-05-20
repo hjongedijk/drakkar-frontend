@@ -305,6 +305,13 @@ export function Settings() {
   if (settings.isLoading || policies.isLoading || naming.isLoading || !draft || !policyDraft || !namingDraft) return <LoadingState />;
   if (settings.isError) return <ErrorState message="Could not load settings." />;
 
+  const totalConnectionBudget = Math.max(0, Number(policyDraft.maxTotalUsenetConnections) || 0);
+  const downloadConnectionBudget = Math.max(0, Number(policyDraft.maxDownloadConnections) || 0);
+  const streamingConnectionBudget = Math.max(0, Number(policyDraft.maxStreamingConnections) || 0);
+  const usedConnectionBudget = downloadConnectionBudget + streamingConnectionBudget;
+  const remainingConnectionBudget = Math.max(0, totalConnectionBudget - usedConnectionBudget);
+  const overConnectionBudget = usedConnectionBudget > totalConnectionBudget;
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
@@ -560,6 +567,13 @@ export function Settings() {
         <SettingsCard title="Queue Management" tab="queue" activeTab={settingsTab}>
           <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
             Max total connections auto-syncs from enabled Usenet providers. Example: 2 providers x 4 connections = 8 total. Download and streaming limits share that total budget.
+          </div>
+          <div className={`rounded-xl border p-3 text-sm ${overConnectionBudget ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border/60 bg-background/50 text-foreground"}`}>
+            <p className="font-medium">Download + Streaming must stay within Total.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Total {totalConnectionBudget} = Download {downloadConnectionBudget} + Streaming {streamingConnectionBudget}{remainingConnectionBudget > 0 ? ` + ${remainingConnectionBudget} unused` : ""}
+            </p>
+            {overConnectionBudget ? <p className="mt-2 text-xs font-medium">Over budget by {usedConnectionBudget - totalConnectionBudget}. Backend will clamp values on save.</p> : null}
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput label="Streaming priority" type="number" value={String(policyDraft.streamingPriority)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamingPriority: Number(value) })} />
