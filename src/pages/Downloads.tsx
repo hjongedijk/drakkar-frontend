@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileCheck2, Pause, Play, RotateCcw, Trash2, Upload, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Download as DownloadType } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Button } from "../components/ui/button";
@@ -16,6 +16,7 @@ export function Downloads() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const queue = useQuery({ queryKey: ["downloads", "queue"], queryFn: api.queue, refetchInterval: 5000, refetchOnWindowFocus: false });
   const history = useQuery({ queryKey: ["downloads", "history"], queryFn: api.history, refetchInterval: 20000, refetchOnWindowFocus: false });
+  const status = useQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 5000, refetchOnWindowFocus: false });
   const addUrl = useRefreshMutation((value: string) => api.addUrl(value), [["downloads", "queue"]], { success: "NZB URL queued" });
   const testUrl = useRefreshMutation((value: string) => api.testNzbUrl(value), []);
   const addNzb = useRefreshMutation((file: File) => addNzbFile(file), [["downloads", "queue"]], { success: "NZB file queued" });
@@ -30,6 +31,22 @@ export function Downloads() {
   const active = tab === "queue" ? queue.data : history.data;
   const loading = tab === "queue" ? queue.isLoading : history.isLoading;
   const errored = tab === "queue" ? queue.isError : history.isError;
+  const totalSpeedBytes = useMemo(
+    () => (queue.data ?? []).reduce((sum, download) => sum + Math.max(0, download.speedBytesSec || 0), 0),
+    [queue.data]
+  );
+  const fastestDownload = useMemo(
+    () => [...(queue.data ?? [])].sort((a, b) => (b.speedBytesSec || 0) - (a.speedBytesSec || 0))[0],
+    [queue.data]
+  );
+  const activeJobCount = useMemo(
+    () => (queue.data ?? []).filter((download) => ["downloading", "verifying", "prepared", "fetching_nzb"].includes(download.status)).length,
+    [queue.data]
+  );
+  const peakSpeedRef = useRef(0);
+  useEffect(() => {
+    peakSpeedRef.current = Math.max(peakSpeedRef.current, totalSpeedBytes);
+  }, [totalSpeedBytes]);
 
   return (
     <div className="space-y-5">
@@ -88,6 +105,31 @@ export function Downloads() {
       {urlTestResult ? <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">{urlTestResult}</div> : null}
       {uploadStatus ? <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">{uploadStatus}</div> : null}
 
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Current Throughput"
+          value={`${formatBytes(totalSpeedBytes)}/s`}
+          detail="Live sum of active Usenet job speeds"
+        />
+        <MetricCard
+          label="Session Peak"
+          value={`${formatBytes(peakSpeedRef.current)}/s`}
+          detail="Highest total speed seen since opening this page"
+        />
+        <MetricCard
+          label="Active Queue Jobs"
+          value={String(activeJobCount)}
+          detail={fastestDownload ? `Fastest: ${fastestDownload.title}` : "No active download speed yet"}
+        />
+        <MetricCard
+          label="Connection Budget"
+          value={`${status.data?.bandwidth?.allocation.downloads ?? 0} download / ${status.data?.bandwidth?.policy.maxTotalUsenetConnections ?? 0} total`}
+          detail={status.data?.bandwidth?.activeStreamCount
+            ? `${status.data.bandwidth.activeStreamCount} active stream(s) sharing bandwidth`
+            : "All idle streaming capacity can be used by downloads"}
+        />
+      </section>
+
       <div className="flex flex-wrap gap-2">
         {(["queue", "history"] as const).map((item) => (
           <Button key={item} variant={tab === item ? "default" : "outline"} onClick={() => setTab(item)}>{item}</Button>
@@ -138,6 +180,16 @@ function formatBytes(value: number) {
     unit += 1;
   }
   return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+      <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{detail}</p>
+    </div>
+  );
 }
 
 function DownloadRow({ download, onPause, onResume, onCancel, onRetry, onMakeAvailable, onDelete }: { download: DownloadType; onPause: (id: string) => void; onResume: (id: string) => void; onCancel: (id: string) => void; onRetry: (id: string) => void; onMakeAvailable: (id: string) => void; onDelete: (id: string) => void }) {
