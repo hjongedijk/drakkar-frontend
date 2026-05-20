@@ -65,7 +65,7 @@ export type ApiStatus = {
   version?: string;
   backend: string;
   postgresql: string;
-  redis: string;
+  valkey: string;
   nzbhydra: string;
   seerr: string;
   activeDownloads: number;
