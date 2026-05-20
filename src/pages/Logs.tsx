@@ -27,8 +27,8 @@ export function Logs() {
         </div>
         <Button className="w-full sm:w-auto" variant="outline" asChild>
           <a href={api.logsDownloadUrl()} download>
-            <Download className="mr-2 h-4 w-4" />
-            Download
+            <Download className="h-4 w-4 sm:mr-2" />
+            <span className="sr-only sm:not-sr-only">Download</span>
           </a>
         </Button>
       </div>

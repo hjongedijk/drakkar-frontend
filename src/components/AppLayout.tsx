@@ -194,22 +194,31 @@ export function AppLayout() {
             to={item.to}
             className={({ isActive }) =>
               cn(
-                "flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-semibold text-muted-foreground",
+                "relative flex min-w-0 items-center justify-center rounded-2xl px-1 py-3 text-muted-foreground transition",
                 isActive && "bg-white/15 text-foreground"
               )
             }
+            aria-label={item.label}
+            title={item.label}
           >
-            <item.icon className="h-4 w-4" />
-            <span className="max-w-full truncate">{item.label}</span>
+            {({ isActive }) => (
+              <>
+                <item.icon className="h-5 w-5" />
+                <span className="sr-only">{item.label}</span>
+                {isActive ? <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-primary" /> : null}
+              </>
+            )}
           </NavLink>
         ))}
         <button
-          className="flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-semibold text-muted-foreground"
+          className="relative flex min-w-0 items-center justify-center rounded-2xl px-1 py-3 text-muted-foreground transition"
           type="button"
           onClick={() => setMobileOpen(true)}
+          aria-label="More navigation"
+          title="More"
         >
-          <Menu className="h-4 w-4" />
-          <span>More</span>
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">More</span>
         </button>
       </nav>
     </div>

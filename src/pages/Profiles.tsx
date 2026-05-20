@@ -104,9 +104,9 @@ export function Profiles() {
             </div>
             <div className="space-y-2">
               <h3 className="text-sm font-semibold">Test Release</h3>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input value={title} onChange={(event) => setTitle(event.target.value)} />
-                <Button onClick={() => test.mutate(selected)}>Score</Button>
+                <Button className="sm:w-auto" onClick={() => test.mutate(selected)}>Score</Button>
               </div>
               {test.data && <div className="rounded-md border p-3 text-sm">Score {test.data.score} · {test.data.accepted ? "accepted" : "rejected"} · {test.data.reasons.join(", ") || "no rejection reasons"}</div>}
             </div>
