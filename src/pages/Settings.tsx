@@ -453,11 +453,14 @@ export function Settings() {
           </div>
         </SettingsCard>
         <SettingsCard title="Queue Management" tab="queue" activeTab={settingsTab}>
+          <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
+            Download connection caps auto-sync from enabled Usenet providers. Example: 2 providers x 4 connections = 8 total. Disable one provider and caps drop automatically.
+          </div>
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput label="Streaming priority" type="number" value={String(policyDraft.streamingPriority)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamingPriority: Number(value) })} />
-            <LabeledInput label="Max download connections" type="number" value={String(policyDraft.maxDownloadConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxDownloadConnections: Number(value) })} />
+            <LabeledInput label="Max download connections" type="number" value={String(policyDraft.maxDownloadConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxDownloadConnections: Number(value) })} disabled />
             <LabeledInput label="Max streaming connections" type="number" value={String(policyDraft.maxStreamingConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxStreamingConnections: Number(value) })} />
-            <LabeledInput label="Max total connections" type="number" value={String(policyDraft.maxTotalUsenetConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxTotalUsenetConnections: Number(value) })} />
+            <LabeledInput label="Max total connections" type="number" value={String(policyDraft.maxTotalUsenetConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxTotalUsenetConnections: Number(value) })} disabled />
             <LabeledInput label="Stream chunk bytes" type="number" value={String(policyDraft.streamChunkSizeBytes)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamChunkSizeBytes: Number(value) })} />
             <LabeledInput label="Read-ahead bytes" type="number" value={String(policyDraft.streamReadAheadBytes)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamReadAheadBytes: Number(value) })} />
             <LabeledInput label="Memory cache max GB" type="number" value={String(policyDraft.streamCacheMaxSizeGb)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamCacheMaxSizeGb: Number(value) })} />
@@ -557,8 +560,8 @@ function SettingsCard({ title, children, tab, activeTab }: { title: string; chil
   return <Card className="space-y-3 p-4"><h2 className="text-sm font-semibold">{title}</h2>{children}</Card>;
 }
 
-function LabeledInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <label className="block space-y-1 text-sm"><span className="text-muted-foreground">{label}</span><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
+function LabeledInput({ label, value, onChange, type = "text", disabled = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; disabled?: boolean }) {
+  return <label className="block space-y-1 text-sm"><span className="text-muted-foreground">{label}</span><Input type={type} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function LabeledSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
