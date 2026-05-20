@@ -255,6 +255,10 @@ export type MediaRequest = {
   seasons?: unknown;
   episodes?: unknown;
   downloadId?: string | null;
+  download?: {
+    id: string;
+    status: string;
+  } | null;
 };
 
 export type RequestSyncResult = {

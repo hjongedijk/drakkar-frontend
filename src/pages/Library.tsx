@@ -45,10 +45,10 @@ const monitorLegend = [
   { label: "Downloading (One or more episodes)", classes: "bg-[#8b5cf6]" }
 ];
 
-const activeRequestStatuses = new Set(["pending", "approved", "requested", "searching", "grabbed"]);
+const activeDownloadStatuses = new Set(["queued", "fetching_nzb", "verifying", "prepared", "waiting_for_provider", "waiting_for_nzb", "downloading", "paused"]);
 
 function requestIsQueued(request?: MediaRequest) {
-  return Boolean(request && activeRequestStatuses.has(request.status));
+  return Boolean(request?.download && activeDownloadStatuses.has(request.download.status));
 }
 
 export function Library() {
@@ -243,13 +243,14 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
       availableItems: [],
       missingCount: request.mediaType === "movie" ? 1 : 0,
       availableCount: 0,
-      downloadingCount: requestIsQueued(request) ? 1 : 0
+      downloadingCount: 0
     });
   }
 
   for (const item of dedupeLibraryItems(items)) {
     const key = groupKey(item);
     const request = requestByKey.get(key);
+    const isImportedItem = item.sourceKey.startsWith("import:");
     const group = groups.get(key) ?? {
       key,
       mediaType: item.mediaType as "movie" | "tv",
@@ -272,11 +273,11 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     group.backdropUrl ??= item.backdropUrl;
     group.overview ??= item.overview;
     group.items.push(item);
-    if (item.libraryStatus === "available") {
+    if (isImportedItem && item.libraryStatus === "available") {
       group.availableItems.push(item);
       group.availableCount += 1;
     }
-    if (item.libraryStatus === "grabbed" || item.libraryStatus === "searching" || item.libraryStatus === "requested") {
+    if (isImportedItem && (item.libraryStatus === "grabbed" || item.libraryStatus === "searching" || item.libraryStatus === "requested")) {
       group.downloadingCount += 1;
     }
     groups.set(key, group);
