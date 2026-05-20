@@ -47,8 +47,8 @@ function toneFor(status: string) {
 export function useDownloadToasts() {
   const { notify } = useToast();
   const seen = useRef(new Map<string, string>());
-  const queue = useQuery({ queryKey: ["downloads", "queue", "toast-watch"], queryFn: api.queue, refetchInterval: 8000 });
-  const history = useQuery({ queryKey: ["downloads", "history", "toast-watch"], queryFn: api.history, refetchInterval: 15000 });
+  const queue = useQuery({ queryKey: ["downloads", "queue"], queryFn: api.queue, refetchInterval: 8000, refetchOnWindowFocus: false });
+  const history = useQuery({ queryKey: ["downloads", "history"], queryFn: api.history, refetchInterval: 15000, refetchOnWindowFocus: false });
 
   useEffect(() => {
     const downloads = [...(queue.data ?? []), ...(history.data ?? [])];
