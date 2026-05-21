@@ -130,6 +130,13 @@ export type DiscoverHomeResponse = {
   tv: DiscoverMediaItem[];
 };
 
+export type DiscoverListResponse = {
+  mediaType: "movie" | "tv";
+  page: number;
+  totalPages: number;
+  items: DiscoverMediaItem[];
+};
+
 export type ReleaseCalendarEntry = {
   id: string;
   type: "movie" | "show" | "episode";
@@ -241,6 +248,25 @@ export type QualityProfile = {
   requiredWords: string[];
   preferredLanguages: string[];
   requiredLanguages: string[];
+  minSize?: number | null;
+  maxSize?: number | null;
+  allowHDR: boolean;
+  allowDV: boolean;
+  allowRemux: boolean;
+  allowBluRay: boolean;
+  allowWebDL: boolean;
+  allowWebRip: boolean;
+  allowX264: boolean;
+  allowX265: boolean;
+  allowAV1: boolean;
+  allowMultiAudio: boolean;
+  rejectCam: boolean;
+  rejectTelesync: boolean;
+  rejectScreener: boolean;
+  rejectPassworded: boolean;
+  rejectSuspicious: boolean;
+  preferProper: boolean;
+  preferRepack: boolean;
 };
 
 export type MediaRequest = {
@@ -610,6 +636,7 @@ export type MediaLibraryItem = {
   size?: number | null;
   lastStreamedAt?: string | null;
   streamCount: number;
+  createdAt: string;
   updatedAt: string;
 };
 
@@ -625,9 +652,11 @@ export const api = {
   status: getStatus,
   healthChecks: () => apiRequest<HealthChecksResponse>("/api/health/checks"),
   discoverHome: () => apiRequest<DiscoverHomeResponse>("/api/discover/home"),
+  discoverList: (mediaType: "movie" | "tv", page = 1) => apiRequest<DiscoverListResponse>(`/api/discover/${mediaType}?page=${page}`),
   releaseCalendar: (month?: string) => apiRequest<ReleaseCalendarResponse>(`/api/release-calendar${month ? `?month=${encodeURIComponent(month)}` : ""}`),
   settings: () => apiRequest<Settings>("/api/settings"),
   updateSettings: (settings: Settings) => apiRequest<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(settings) }),
+  resetEnvironment: () => apiRequest<{ ok: boolean; cleared: Record<string, unknown> }>("/api/system/reset-environment", { method: "POST", body: "{}" }),
   policies: () => apiRequest<PolicySettings>("/api/settings/policies"),
   updatePolicies: (policies: PolicySettings) => apiRequest<PolicySettings>("/api/settings/policies", { method: "PUT", body: JSON.stringify(policies) }),
   ignoredFiles: () => apiRequest<string[]>("/api/ignored-files"),

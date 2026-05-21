@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Download, Eye, RefreshCw, Search, Sparkles, Trash2, Tv } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { api, type MediaLibraryItem, type MediaRequest, type Release, type RequestMonitor } from "../api/client";
+import { apiAssetUrl } from "../config";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -46,14 +46,21 @@ const monitorLegend = [
 ];
 
 const activeDownloadStatuses = new Set(["queued", "fetching_nzb", "verifying", "prepared", "waiting_for_provider", "waiting_for_nzb", "downloading", "paused"]);
+const inProgressMovieRequestStatuses = new Set(["grabbed", "available", "importing", "processing", "prepared"]);
 
 function requestIsQueued(request?: MediaRequest) {
   return Boolean(request?.download && activeDownloadStatuses.has(request.download.status));
 }
 
+function movieRequestPhase(request?: MediaRequest) {
+  if (!request) return "unmonitored";
+  if (requestIsQueued(request)) return "queued";
+  if (inProgressMovieRequestStatuses.has(request.status)) return "processing";
+  return "missing";
+}
+
 export function Library() {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { notify } = useToast();
   const [tab, setTab] = useState<"all" | "movie" | "tv">("all");
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -186,7 +193,6 @@ export function Library() {
             setActiveKey(null);
             setReplacement(null);
           }}
-          onWatch={() => navigate(`/watch?group=${encodeURIComponent(activeGroup.key)}`)}
           onGrabMissing={(requestId) => {
             notify("Queueing missing items...", "info");
             grabRequest.mutate(requestId);
@@ -382,7 +388,6 @@ function LibraryDetails({
   group,
   replacement,
   onClose,
-  onWatch,
   onGrabMissing,
   onDelete,
   onSearchReplace,
@@ -392,7 +397,6 @@ function LibraryDetails({
   group: LibraryGroup;
   replacement: { item: MediaLibraryItem; releases: Release[] } | null;
   onClose: () => void;
-  onWatch: () => void;
   onGrabMissing: (requestId: string) => void;
   onDelete: (ids: string[]) => void;
   onSearchReplace: (id: string) => void;
@@ -417,6 +421,7 @@ function LibraryDetails({
     return [...bySeason.entries()].sort(([a], [b]) => a - b);
   }, [group.items]);
   const primaryAvailable = group.availableItems[0];
+  const primaryStreamUrl = primaryAvailable?.filePath ? apiAssetUrl(`/api/vfs/stream?path=${encodeURIComponent(primaryAvailable.filePath)}`) : null;
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -443,10 +448,14 @@ function LibraryDetails({
               </div>
               {group.overview ? <p className="max-w-3xl text-sm text-muted-foreground">{group.overview}</p> : null}
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={onWatch} disabled={group.availableItems.length === 0}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  Watch
-                </Button>
+                {primaryStreamUrl ? (
+                  <Button variant="outline" asChild>
+                    <a href={primaryStreamUrl} target="_blank" rel="noreferrer">
+                      <Eye className="mr-2 h-4 w-4" />
+                      Open Stream
+                    </a>
+                  </Button>
+                ) : null}
                 {group.request?.id ? (
                   <Button onClick={() => onGrabMissing(group.request!.id)}>
                     <Download className="mr-2 h-4 w-4" />
@@ -489,10 +498,12 @@ function LibraryDetails({
 
 function groupStatus(group: LibraryGroup) {
   if (group.mediaType === "movie") {
+    const phase = movieRequestPhase(group.request);
     if (group.downloadingCount > 0) return { label: "Queued", color: "bg-[#8b5cf6]" };
     if (group.availableCount > 0) return group.request
       ? { label: "Downloaded (Monitored)", color: "bg-[#22c55e]" }
       : { label: "Downloaded (Unmonitored)", color: "bg-[#7c8596]" };
+    if (phase === "processing") return { label: "Grabbed (Monitored)", color: "bg-[#5f98ff]" };
     return group.request
       ? { label: "Missing (Monitored)", color: "bg-[#ff5b5b]" }
       : { label: "Missing (Unmonitored)", color: "bg-[#ffab24]" };
@@ -507,21 +518,24 @@ function groupStatus(group: LibraryGroup) {
 }
 
 function movieSummary(group: LibraryGroup) {
+  const phase = movieRequestPhase(group.request);
   if (group.availableCount > 0) return group.request ? "Downloaded" : "Downloaded (unmonitored)";
   if (group.downloadingCount > 0) return "Queued";
+  if (phase === "processing") return "Grabbed";
   return group.request ? "Missing" : "Missing (unmonitored)";
 }
 
 function MovieStatusPanel({ group }: { group: LibraryGroup }) {
   const requestStatus = group.request?.status ?? "not_requested";
   const available = group.availableItems[0];
+  const phase = movieRequestPhase(group.request);
   return (
     <div className="rounded-2xl border bg-background/40 p-5">
       <h3 className="mb-4 text-lg font-semibold">Movie Status</h3>
       <div className="grid gap-3 md:grid-cols-3">
         <InfoBox label="Request" value={requestStatus} />
-        <InfoBox label="Availability" value={available ? "available" : "missing"} />
-        <InfoBox label="Library" value={available ? "ready to watch" : "not available"} />
+        <InfoBox label="Availability" value={available ? "available" : phase === "processing" ? "grabbed" : "missing"} />
+        <InfoBox label="Library" value={available ? "ready to watch" : phase === "processing" ? "processing import" : "not available"} />
       </div>
     </div>
   );

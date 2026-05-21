@@ -18,7 +18,7 @@ export function Dashboard() {
     () =>
       availableLibrary
         .filter((item) => item.sourceKey.startsWith("import:"))
-        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        .sort(compareRecentlyAdded)
         .slice(0, 12),
     [availableLibrary]
   );
@@ -102,9 +102,9 @@ export function Dashboard() {
         </section>
       ) : null}
 
-      <MediaRow title="Recently Added" items={recentlyAdded} />
-      <MediaRow title="Trending Movies" items={discover.data?.movies ?? []} />
-      <MediaRow title="Trending TV Shows" items={discover.data?.tv ?? []} />
+      <MediaRow title="Recently Added" items={recentlyAdded} linkTo="/library" linkLabel="View Library" />
+      <MediaRow title="Trending Movies" items={discover.data?.movies ?? []} linkTo="/discover/movie" linkLabel="View All" />
+      <MediaRow title="Trending TV Shows" items={discover.data?.tv ?? []} linkTo="/discover/tv" linkLabel="View All" />
     </div>
   );
 }
@@ -159,7 +159,7 @@ function mediaKey(item: { mediaType: string; title: string; year?: number | null
 function uniqueLibraryTitles(items: MediaLibraryItem[]) {
   const seen = new Set<string>();
   return items
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+    .sort(compareRecentlyAdded)
     .filter((item) => {
       const key = mediaKey(item);
       if (seen.has(key)) return false;
@@ -179,6 +179,8 @@ function detailsHref(item: {
   tmdbId?: string | null;
   tvdbId?: string | null;
   imdbId?: string | null;
+  season?: number | null;
+  episode?: number | null;
   posterUrl?: string | null;
   backdropUrl?: string | null;
   overview?: string | null;
@@ -191,6 +193,8 @@ function detailsHref(item: {
   if (item.tmdbId) params.set("tmdbId", item.tmdbId);
   if (item.tvdbId) params.set("tvdbId", item.tvdbId);
   if (item.imdbId) params.set("imdbId", item.imdbId);
+  if (typeof item.season === "number") params.set("season", String(item.season));
+  if (typeof item.episode === "number") params.set("episode", String(item.episode));
   if (item.posterUrl) params.set("posterUrl", item.posterUrl);
   if (item.backdropUrl) params.set("backdropUrl", item.backdropUrl);
   if (item.overview) params.set("overview", item.overview);
@@ -199,17 +203,21 @@ function detailsHref(item: {
 
 function MediaRow({
   title,
-  items
+  items,
+  linkTo,
+  linkLabel
 }: {
   title: string;
   items: Array<MediaLibraryItem | DiscoverMediaItem>;
+  linkTo: string;
+  linkLabel: string;
 }) {
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="section-title">{title}</h2>
-        <Link className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground" to="/library">
-          View All
+        <Link className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground" to={linkTo}>
+          {linkLabel}
         </Link>
       </div>
       {items.length === 0 ? (
@@ -221,9 +229,10 @@ function MediaRow({
               key={`${item.mediaType}:${item.tmdbId ?? item.tvdbId ?? item.imdbId ?? item.title}`}
               to={detailsHref(item)}
               className="group w-40 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-card"
+              draggable={false}
             >
               <div className="aspect-[2/3] bg-muted">
-                {item.posterUrl ? <img src={item.posterUrl} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : null}
+                {item.posterUrl ? <img src={item.posterUrl} alt="" draggable={false} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : null}
               </div>
               <div className="p-3">
                 <p className="truncate text-sm font-bold">{recentTitle(item)}</p>
@@ -244,10 +253,13 @@ function DraggableScroller({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={ref}
-      className="media-scrollbar flex gap-4 overflow-x-auto pb-3 [scrollbar-gutter:stable] cursor-grab active:cursor-grabbing"
+      className="media-scrollbar flex gap-4 overflow-x-auto pb-3 [scrollbar-gutter:stable] select-none"
       onPointerDown={(event) => {
         const node = ref.current;
-        if (!node) return;
+        if (!node || event.button !== 0) return;
+        if (event.target instanceof HTMLElement) {
+          event.target.closest("a,img,button")?.setAttribute("draggable", "false");
+        }
         drag.current = {
           pointerId: event.pointerId,
           startX: event.clientX,
@@ -261,12 +273,14 @@ function DraggableScroller({ children }: { children: React.ReactNode }) {
         if (!node || drag.current.pointerId !== event.pointerId) return;
         const delta = event.clientX - drag.current.startX;
         if (Math.abs(delta) > 6) drag.current.moved = true;
+        if (drag.current.moved) event.preventDefault();
         node.scrollLeft = drag.current.startScrollLeft - delta;
       }}
       onPointerUp={(event) => {
         const node = ref.current;
         if (!node || drag.current.pointerId !== event.pointerId) return;
         node.releasePointerCapture(event.pointerId);
+        drag.current.pointerId = -1;
         window.setTimeout(() => {
           drag.current.moved = false;
         }, 0);
@@ -275,12 +289,21 @@ function DraggableScroller({ children }: { children: React.ReactNode }) {
         const node = ref.current;
         if (!node || drag.current.pointerId !== event.pointerId) return;
         node.releasePointerCapture(event.pointerId);
+        drag.current.pointerId = -1;
+        drag.current.moved = false;
+      }}
+      onPointerLeave={() => {
+        if (drag.current.pointerId === -1) return;
+        drag.current.pointerId = -1;
         drag.current.moved = false;
       }}
       onClickCapture={(event) => {
         if (!drag.current.moved) return;
         event.preventDefault();
         event.stopPropagation();
+      }}
+      onDragStart={(event) => {
+        event.preventDefault();
       }}
     >
       {children}
@@ -289,12 +312,6 @@ function DraggableScroller({ children }: { children: React.ReactNode }) {
 }
 
 function recentTitle(item: MediaLibraryItem | DiscoverMediaItem) {
-  if ("season" in item && typeof item.season === "number" && typeof item.episode === "number") {
-    return `${item.title} ${episodeCode(item.season, item.episode)}`;
-  }
-  if ("season" in item && typeof item.season === "number") {
-    return `${item.title} Season ${String(item.season).padStart(2, "0")}`;
-  }
   return item.title;
 }
 
@@ -310,4 +327,12 @@ function recentMeta(item: MediaLibraryItem | DiscoverMediaItem) {
 
 function episodeCode(season: number, episode: number) {
   return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
+}
+
+function compareRecentlyAdded(a: MediaLibraryItem, b: MediaLibraryItem) {
+  return (
+    Date.parse(b.updatedAt) - Date.parse(a.updatedAt) ||
+    Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+    a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true })
+  );
 }

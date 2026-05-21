@@ -32,9 +32,9 @@ export function HealthPage() {
         </div>
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="Total Checked" value={overview.totalChecked} />
-          <StatCard label={`Healthy (${percent(overview.healthy)}%)`} value={overview.healthy} tone="text-emerald-400" />
-          <StatCard label={`Repaired (${percent(overview.repaired)}%)`} value={overview.repaired} tone="text-cyan-400" />
-          <StatCard label={`Deleted (${percent(overview.deleted)}%)`} value={overview.deleted} tone="text-red-400" />
+          <StatCard label={`Healthy (${percent(overview.healthy)}%)`} value={overview.healthy} tone="text-emerald-400" progress={percent(overview.healthy)} progressTone="bg-emerald-300" />
+          <StatCard label={`Repaired (${percent(overview.repaired)}%)`} value={overview.repaired} tone="text-cyan-400" progress={percent(overview.repaired)} progressTone="bg-cyan-300" />
+          <StatCard label={`Deleted (${percent(overview.deleted)}%)`} value={overview.deleted} tone="text-red-400" progress={percent(overview.deleted)} progressTone="bg-red-300" />
         </div>
       </Card>
 
@@ -70,9 +70,7 @@ export function HealthPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {badge(formatDate(item.createdAt, "Unknown"), "info")}
                   {badge(formatDate(item.lastCheckAt, "Never"), "warning")}
-                  {item.progress > 0
-                    ? progressBadge(item.progress)
-                    : badge(formatDate(item.nextCheckAt, "ASAP"), item.lastCheckAt ? "success" : "warning")}
+                  {queueState(item)}
                 </div>
               </div>
             ))}
@@ -96,11 +94,7 @@ export function HealthPage() {
                     </td>
                     <td className="p-4">{badge(formatDate(item.createdAt, "Unknown"), "info")}</td>
                     <td className="p-4">{badge(formatDate(item.lastCheckAt, "Never"), "warning")}</td>
-                    <td className="p-4">
-                      {item.progress > 0
-                        ? progressBadge(item.progress)
-                        : badge(formatDate(item.nextCheckAt, "ASAP"), item.lastCheckAt ? "success" : "warning")}
-                    </td>
+                    <td className="p-4">{queueState(item)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -113,11 +107,28 @@ export function HealthPage() {
   );
 }
 
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: string }) {
+function StatCard({
+  label,
+  value,
+  tone,
+  progress,
+  progressTone
+}: {
+  label: string;
+  value: number;
+  tone?: string;
+  progress?: number;
+  progressTone?: string;
+}) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-center">
       <div className={`text-4xl font-bold ${tone ?? ""}`}>{value}</div>
       <div className="mt-2 text-sm text-muted-foreground">{label}</div>
+      {typeof progress === "number" ? (
+        <div className="mx-auto mt-4 h-2 w-full max-w-36 overflow-hidden rounded-full bg-black/30">
+          <div className={`h-full rounded-full ${progressTone ?? "bg-white"}`} style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -151,6 +162,23 @@ function progressBadge(progress: number) {
       <span>{Math.round(progress)}%</span>
       <div className="h-1.5 w-14 overflow-hidden rounded-full bg-black/30">
         <div className="h-full rounded-full bg-emerald-300" style={{ width: `${Math.max(6, Math.min(100, progress))}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function queueState(item: { progress: number; status: string; nextCheckAt: string | null; lastCheckAt: string | null }) {
+  if (item.status === "running" || item.progress > 0) return progressBadge(item.progress || 5);
+  if (!item.lastCheckAt) return queuedBadge("ASAP");
+  return badge(formatDate(item.nextCheckAt, "ASAP"), "success");
+}
+
+function queuedBadge(label: string) {
+  return (
+    <div className="inline-flex min-w-28 items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-200">
+      <span>{label}</span>
+      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-black/30">
+        <div className="h-full w-[8%] rounded-full bg-amber-200/80" />
       </div>
     </div>
   );

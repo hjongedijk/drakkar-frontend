@@ -3,17 +3,22 @@ import { ChevronDown, Eye, Tv } from "lucide-react";
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, type MediaLibraryItem, type MediaRequest } from "../api/client";
+import { apiAssetUrl } from "../config";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 
 type DetailsGroup = {
   title: string;
+  episodeLabel?: string | null;
+  episodeTitle?: string | null;
   mediaType: "movie" | "tv";
   year?: number | null;
   tmdbId?: string | null;
   tvdbId?: string | null;
   imdbId?: string | null;
+  season?: number | null;
+  episode?: number | null;
   posterUrl?: string | null;
   backdropUrl?: string | null;
   overview?: string | null;
@@ -29,6 +34,8 @@ export function DetailsPage() {
   const tmdbId = params.get("tmdbId");
   const tvdbId = params.get("tvdbId");
   const imdbId = params.get("imdbId");
+  const season = numberParam(params.get("season"));
+  const episode = numberParam(params.get("episode"));
   const posterUrl = params.get("posterUrl");
   const backdropUrl = params.get("backdropUrl");
   const overview = params.get("overview");
@@ -39,23 +46,28 @@ export function DetailsPage() {
   const details = useMemo<DetailsGroup | null>(() => {
     if (!title) return null;
     const availableItems = (library.data ?? []).filter(
-      (item) => item.libraryStatus === "available" && sameIdentity(item, { mediaType, title, year, tmdbId, tvdbId, imdbId })
+      (item) => item.libraryStatus === "available" && sameIdentity(item, { mediaType, title, year, tmdbId, tvdbId, imdbId, season, episode })
     );
-    const request = (requests.data ?? []).find((item) => sameIdentity(item, { mediaType, title, year, tmdbId, tvdbId, imdbId }));
+    const request = (requests.data ?? []).find((item) => sameIdentity(item, { mediaType, title, year, tmdbId, tvdbId, imdbId, season, episode }));
+    const leadItem = availableItems[0];
     return {
       title,
+      episodeLabel: season != null && episode != null ? `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}` : null,
+      episodeTitle: leadItem?.episodeTitle ?? null,
       mediaType,
       year,
       tmdbId,
       tvdbId,
       imdbId,
+      season,
+      episode,
       posterUrl,
       backdropUrl,
       overview,
       availableItems,
       request
     };
-  }, [library.data, requests.data, mediaType, title, year, tmdbId, tvdbId, imdbId, posterUrl, backdropUrl, overview]);
+  }, [library.data, requests.data, mediaType, title, year, tmdbId, tvdbId, imdbId, season, episode, posterUrl, backdropUrl, overview]);
 
   const monitor = useQuery({
     queryKey: ["requests", details?.request?.id, "monitor"],
@@ -67,10 +79,9 @@ export function DetailsPage() {
   if (library.isLoading || requests.isLoading) return <LoadingState />;
   if (library.isError || requests.isError) return <ErrorState message="Could not load media details." />;
   if (!details) return <EmptyState message="No media details found." />;
-
-  const watchLink = details.availableItems[0]
-    ? `/watch?group=${encodeURIComponent(groupKey(details.availableItems[0]))}&item=${encodeURIComponent(details.availableItems[0].id)}`
-    : "/watch";
+  const streamLink = details.availableItems[0]?.filePath
+    ? apiAssetUrl(`/api/vfs/stream?path=${encodeURIComponent(details.availableItems[0].filePath)}`)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -85,18 +96,22 @@ export function DetailsPage() {
             <div className="flex flex-wrap gap-2">
               <Badge>{details.mediaType}</Badge>
               {details.year ? <Badge>{details.year}</Badge> : null}
+              {details.episodeLabel ? <Badge>{details.episodeLabel}</Badge> : null}
               {details.availableItems.length > 0 ? <Badge>{details.availableItems.length} available</Badge> : null}
               {details.request ? <Badge>{details.request.status}</Badge> : null}
             </div>
             <h1 className="text-4xl font-bold md:text-5xl">{details.title}</h1>
+            {details.episodeTitle ? <p className="text-lg font-semibold text-white/85">{details.episodeTitle}</p> : null}
             {details.overview ? <p className="max-w-3xl text-sm text-white/75 md:text-base">{details.overview}</p> : null}
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <Button className="w-full sm:w-auto" asChild variant="outline" disabled={details.availableItems.length === 0}>
-                <Link to={watchLink}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  Watch
-                </Link>
-              </Button>
+              {streamLink ? (
+                <Button className="w-full sm:w-auto" asChild variant="outline">
+                  <a href={streamLink} target="_blank" rel="noreferrer">
+                    <Eye className="mr-2 h-4 w-4" />
+                    Open Stream
+                  </a>
+                </Button>
+              ) : null}
               <Button className="w-full sm:w-auto" asChild>
                 <Link to="/library">Open Library</Link>
               </Button>
@@ -113,7 +128,7 @@ export function DetailsPage() {
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <InfoBox label="Availability" value={details.availableItems.length > 0 ? "Available" : "Missing"} />
             <InfoBox label="Request" value={details.request?.status ?? "Not requested"} />
-            <InfoBox label="Watch" value={details.availableItems.length > 0 ? "Ready" : "Unavailable"} />
+            <InfoBox label="Stream" value={details.availableItems.length > 0 ? "Ready" : "Unavailable"} />
           </div>
         </section>
       )}
@@ -152,14 +167,20 @@ function SeasonPanels({ monitor }: { monitor: NonNullable<Awaited<ReturnType<typ
 }
 
 function sameIdentity(
-  item: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null },
-  target: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }
+  item: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null; season?: number | null; episode?: number | null },
+  target: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null; season?: number | null; episode?: number | null }
 ) {
   if (item.mediaType !== target.mediaType) return false;
+  const episodeScoped = target.season != null || target.episode != null;
+  const sameEpisode = !episodeScoped || (
+    (target.season ?? null) === (item.season ?? null) &&
+    (target.episode ?? null) === (item.episode ?? null)
+  );
+  if (!sameEpisode) return false;
   if (target.imdbId && item.imdbId === target.imdbId) return true;
   if (target.tmdbId && item.tmdbId === target.tmdbId) return true;
   if (target.tvdbId && item.tvdbId === target.tvdbId) return true;
-  return normalizeTitle(item.title) === normalizeTitle(target.title) && (item.year ?? null) === (target.year ?? null);
+  return normalizeTitle(item.title) === normalizeTitle(target.title) && (item.year ?? null) === (target.year ?? null) && sameEpisode;
 }
 
 function groupKey(item: MediaLibraryItem) {

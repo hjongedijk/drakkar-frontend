@@ -133,6 +133,8 @@ export function Settings() {
     onSuccess: () => {
       notify("Naming rules saved");
       queryClient.invalidateQueries({ queryKey: ["naming"] });
+      queryClient.invalidateQueries({ queryKey: ["library"] });
+      queryClient.invalidateQueries({ queryKey: ["symlinks"] });
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not save naming rules")
   });
@@ -253,6 +255,14 @@ export function Settings() {
       notify("API token revoked");
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not revoke API token")
+  });
+  const resetEnvironment = useMutation({
+    mutationFn: () => api.resetEnvironment(),
+    onSuccess: () => {
+      notify("Environment cleared");
+      queryClient.invalidateQueries();
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not clear environment")
   });
 
   useEffect(() => {
@@ -668,6 +678,23 @@ export function Settings() {
         </SettingsCard>
         <SettingsCard title="FUSE / SAB API" tab="system" activeTab={settingsTab}>
           <p className="text-sm text-muted-foreground">Drakkar mounts releases through FUSE at <span className="font-mono text-foreground">/mnt/fuse</span>, while Plex/library files live at <span className="font-mono text-foreground">/mnt/media</span>. SAB compatibility stays available for tools that push NZBs.</p>
+        </SettingsCard>
+        <SettingsCard title="Danger Zone" tab="system" activeTab={settingsTab}>
+          <div className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
+            <p className="text-sm text-destructive">Clears the full blacklist and removes all downloaded, completed, imported, and library-linked media so the environment starts clean again.</p>
+            <Button
+              variant="outline"
+              className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={resetEnvironment.isPending}
+              onClick={() => {
+                if (!window.confirm("Clear blacklist and remove all downloaded/imported/library media?")) return;
+                if (!window.confirm("This is destructive. Continue?")) return;
+                resetEnvironment.mutate();
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />{resetEnvironment.isPending ? "Clearing..." : "Clear Environment"}
+            </Button>
+          </div>
         </SettingsCard>
       </section>
     </div>

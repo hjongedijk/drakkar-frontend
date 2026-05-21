@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { AppLayout } from "../components/AppLayout";
 import { Dashboard } from "../pages/Dashboard";
 import { DetailsPage } from "../pages/Details";
+import { DiscoverPage } from "../pages/Discover";
 import { Downloads } from "../pages/Downloads";
 import { HealthPage } from "../pages/Health";
 import { Library } from "../pages/Library";
@@ -13,7 +14,6 @@ import { ReleaseCalendarPage } from "../pages/ReleaseCalendar";
 import { SearchPage } from "../pages/Search";
 import { Settings } from "../pages/Settings";
 import { VfsBrowser } from "../pages/VfsBrowser";
-import { WatchPage } from "../pages/Watch";
 import { LoginPage } from "../pages/Login";
 import { LoadingState } from "../components/PageState";
 
@@ -50,12 +50,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <Dashboard /> },
+      { path: "discover/:mediaType", element: <DiscoverPage /> },
       { path: "details", element: <DetailsPage /> },
       { path: "requests", element: <Navigate to="/library" replace /> },
       { path: "search", element: <SearchPage /> },
       { path: "calendar", element: <ReleaseCalendarPage /> },
       { path: "downloads", element: <Downloads /> },
-      { path: "watch", element: <WatchPage /> },
       { path: "health", element: <HealthPage /> },
       { path: "library", element: <Library /> },
       { path: "vfs", element: <VfsBrowser /> },
