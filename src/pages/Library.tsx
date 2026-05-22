@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Download, Eye, RefreshCw, Search, Sparkles, Trash2, Tv } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, Download, RefreshCw, Search, Sparkles, Trash2, Tv } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { api, type MediaLibraryItem, type MediaRequest, type Release, type RequestMonitor } from "../api/client";
-import { apiAssetUrl } from "../config";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import { useToast } from "../components/ToastProvider";
 
 type LibraryGroup = {
@@ -22,6 +22,7 @@ type LibraryGroup = {
   request?: MediaRequest;
   items: MediaLibraryItem[];
   availableItems: MediaLibraryItem[];
+  recentAt: string;
   missingCount: number;
   availableCount: number;
   downloadingCount: number;
@@ -63,6 +64,9 @@ export function Library() {
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const [tab, setTab] = useState<"all" | "movie" | "tv">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "available" | "missing" | "downloading">("all");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [replacement, setReplacement] = useState<{ item: MediaLibraryItem; releases: Release[] } | null>(null);
 
@@ -133,10 +137,42 @@ export function Library() {
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Manual replacement failed.", "error")
   });
+  const searchEpisode = useMutation({
+    mutationFn: ({ requestId, season, episode }: { requestId: string; season: number; episode: number }) => api.searchRequestEpisode(requestId, season, episode),
+    onSuccess: (result, variables) => {
+      const label = `S${String(variables.season).padStart(2, "0")}E${String(variables.episode).padStart(2, "0")}`;
+      notify(`${label}: found ${result.releases.length} release${result.releases.length === 1 ? "" : "s"}.`, result.releases.length > 0 ? "success" : "info");
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Episode search failed.", "error")
+  });
+  const grabEpisode = useMutation({
+    mutationFn: ({ requestId, season, episode }: { requestId: string; season: number; episode: number }) => api.grabRequestEpisode(requestId, season, episode),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+      void queryClient.invalidateQueries({ queryKey: ["downloads"] });
+      notify("Episode queued.", "success");
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not queue episode.", "error")
+  });
 
   const groups = useMemo(() => buildGroups(items.data ?? [], requests.data ?? []), [items.data, requests.data]);
-  const visibleGroups = groups.filter((group) => tab === "all" || group.mediaType === tab);
+  const visibleGroups = groups.filter((group) => {
+    if (tab !== "all" && group.mediaType !== tab) return false;
+    if (statusFilter === "available" && group.availableCount === 0) return false;
+    if (statusFilter === "missing" && group.missingCount === 0) return false;
+    if (statusFilter === "downloading" && group.downloadingCount === 0) return false;
+    if (query && !normalizeTitle(`${group.title} ${group.year ?? ""}`).includes(normalizeTitle(query))) return false;
+    return true;
+  });
+  const pageSize = 40;
+  const totalPages = Math.max(1, Math.ceil(visibleGroups.length / pageSize));
+  const pageGroups = visibleGroups.slice((Math.min(page, totalPages) - 1) * pageSize, Math.min(page, totalPages) * pageSize);
   const activeGroup = visibleGroups.find((group) => group.key === activeKey) ?? groups.find((group) => group.key === activeKey) ?? null;
+
+  useEffect(() => {
+    setPage(1);
+  }, [tab, statusFilter, query]);
 
   if (items.isLoading || requests.isLoading) return <LoadingState />;
   if (items.isError || requests.isError) return <ErrorState message="Could not load library monitor." />;
@@ -159,6 +195,18 @@ export function Library() {
         </div>
       </div>
 
+      <section className="grid gap-3 rounded-2xl border bg-card p-4 md:grid-cols-[1fr_auto]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter library by title or year" />
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {(["all", "available", "missing", "downloading"] as const).map((value) => (
+            <Button key={value} variant={statusFilter === value ? "default" : "outline"} onClick={() => setStatusFilter(value)}>{value}</Button>
+          ))}
+        </div>
+      </section>
+
       <section className="grid gap-3 md:grid-cols-4">
         <Metric label="Monitored Titles" value={groups.length} />
         <Metric label="Available Items" value={groups.reduce((sum, group) => sum + group.availableCount, 0)} />
@@ -179,11 +227,19 @@ export function Library() {
         <EmptyState message="No monitored or available items found." />
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10">
-          {visibleGroups.map((group) => (
+          {pageGroups.map((group) => (
             <PosterCard key={group.key} group={group} onOpen={() => setActiveKey(group.key)} />
           ))}
         </div>
       )}
+
+      {visibleGroups.length > pageSize ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</Button>
+          <span className="text-sm text-muted-foreground">Page {Math.min(page, totalPages)} / {totalPages} · {visibleGroups.length} items</span>
+          <Button variant="outline" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Next</Button>
+        </div>
+      ) : null}
 
       {activeGroup ? (
         <LibraryDetails
@@ -196,6 +252,14 @@ export function Library() {
           onGrabMissing={(requestId) => {
             notify("Queueing missing items...", "info");
             grabRequest.mutate(requestId);
+          }}
+          onSearchEpisode={(requestId, season, episode) => {
+            notify(`Searching S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}...`, "info");
+            searchEpisode.mutate({ requestId, season, episode });
+          }}
+          onGrabEpisode={(requestId, season, episode) => {
+            notify(`Queueing S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}...`, "info");
+            grabEpisode.mutate({ requestId, season, episode });
           }}
           onDelete={(ids) => {
             notify("Deleting library item...", "info");
@@ -247,6 +311,7 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
       request,
       items: [],
       availableItems: [],
+      recentAt: request.createdAt,
       missingCount: request.mediaType === "movie" ? 1 : 0,
       availableCount: 0,
       downloadingCount: 0
@@ -257,7 +322,7 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     const key = groupKey(item);
     const request = requestByKey.get(key);
     const isImportedItem = item.sourceKey.startsWith("import:");
-    const group = groups.get(key) ?? {
+    const group: LibraryGroup = groups.get(key) ?? {
       key,
       mediaType: item.mediaType as "movie" | "tv",
       title: item.mediaType === "tv" ? cleanSeriesTitle(item.title) : item.title,
@@ -271,6 +336,7 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
       request,
       items: [],
       availableItems: [],
+      recentAt: item.createdAt,
       missingCount: 0,
       availableCount: 0,
       downloadingCount: 0
@@ -278,6 +344,7 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     group.posterUrl ??= item.posterUrl;
     group.backdropUrl ??= item.backdropUrl;
     group.overview ??= item.overview;
+    group.recentAt = maxIso(group.recentAt, item.createdAt, item.updatedAt);
     group.items.push(item);
     if (isImportedItem && item.libraryStatus === "available") {
       group.availableItems.push(item);
@@ -299,7 +366,19 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     }
   }
 
-  return [...groups.values()].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+  return [...groups.values()].sort((a, b) => {
+    const recent = Date.parse(b.recentAt) - Date.parse(a.recentAt);
+    if (recent !== 0) return recent;
+    return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+  });
+}
+
+function maxIso(...values: Array<string | null | undefined>) {
+  const initial = values.find((value): value is string => Boolean(value)) ?? new Date(0).toISOString();
+  return values.reduce<string>((best, value) => {
+    if (!value) return best;
+    return Date.parse(value) > Date.parse(best) ? value : best;
+  }, initial);
 }
 
 function dedupeLibraryItems(items: MediaLibraryItem[]) {
@@ -389,6 +468,8 @@ function LibraryDetails({
   replacement,
   onClose,
   onGrabMissing,
+  onSearchEpisode,
+  onGrabEpisode,
   onDelete,
   onSearchReplace,
   onAutoReplace,
@@ -398,6 +479,8 @@ function LibraryDetails({
   replacement: { item: MediaLibraryItem; releases: Release[] } | null;
   onClose: () => void;
   onGrabMissing: (requestId: string) => void;
+  onSearchEpisode: (requestId: string, season: number, episode: number) => void;
+  onGrabEpisode: (requestId: string, season: number, episode: number) => void;
   onDelete: (ids: string[]) => void;
   onSearchReplace: (id: string) => void;
   onAutoReplace: (ids: string[]) => void;
@@ -421,7 +504,6 @@ function LibraryDetails({
     return [...bySeason.entries()].sort(([a], [b]) => a - b);
   }, [group.items]);
   const primaryAvailable = group.availableItems[0];
-  const primaryStreamUrl = primaryAvailable?.filePath ? apiAssetUrl(`/api/vfs/stream?path=${encodeURIComponent(primaryAvailable.filePath)}`) : null;
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -448,14 +530,6 @@ function LibraryDetails({
               </div>
               {group.overview ? <p className="max-w-3xl text-sm text-muted-foreground">{group.overview}</p> : null}
               <div className="flex flex-wrap gap-2">
-                {primaryStreamUrl ? (
-                  <Button variant="outline" asChild>
-                    <a href={primaryStreamUrl} target="_blank" rel="noreferrer">
-                      <Eye className="mr-2 h-4 w-4" />
-                      Open Stream
-                    </a>
-                  </Button>
-                ) : null}
                 {group.request?.id ? (
                   <Button onClick={() => onGrabMissing(group.request!.id)}>
                     <Download className="mr-2 h-4 w-4" />
@@ -486,7 +560,7 @@ function LibraryDetails({
         <div className="space-y-5 p-6">
           {replacement ? <ReplacementPanel replacement={replacement} onGrab={onReplaceRelease} /> : null}
           {group.mediaType === "tv" ? (
-            monitor.data ? <MonitorSeasonList monitor={monitor.data} /> : monitor.isLoading ? <LoadingState /> : <ImportSeasonList seasons={standaloneSeasons} />
+            monitor.data ? <MonitorSeasonList monitor={monitor.data} onSearchEpisode={onSearchEpisode} onGrabEpisode={onGrabEpisode} /> : monitor.isLoading ? <LoadingState /> : <ImportSeasonList seasons={standaloneSeasons} />
           ) : (
             <MovieStatusPanel group={group} />
           )}
@@ -541,7 +615,15 @@ function MovieStatusPanel({ group }: { group: LibraryGroup }) {
   );
 }
 
-function MonitorSeasonList({ monitor }: { monitor: RequestMonitor }) {
+function MonitorSeasonList({
+  monitor,
+  onSearchEpisode,
+  onGrabEpisode
+}: {
+  monitor: RequestMonitor;
+  onSearchEpisode: (requestId: string, season: number, episode: number) => void;
+  onGrabEpisode: (requestId: string, season: number, episode: number) => void;
+}) {
   return (
     <div className="space-y-4">
       {monitor.seasons.map((season) => (
@@ -560,12 +642,31 @@ function MonitorSeasonList({ monitor }: { monitor: RequestMonitor }) {
           <div className="border-t px-4 py-4">
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {season.episodes.map((episode) => (
-                <div key={episode.episodeNumber} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+                <div key={episode.episodeNumber} className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
                   <span className="min-w-0 truncate font-medium">
                     E{String(episode.episodeNumber).padStart(2, "0")}
                     {episode.title ? ` - ${episode.title}` : ""}
                   </span>
-                  <span className={`rounded-full px-2 py-1 text-[11px] font-bold ${episodeStatusClass(episode.status)}`}>{episodeStatusLabel(episode.status)}</span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className={`rounded-full px-2 py-1 text-[11px] font-bold ${episodeStatusClass(episode.status)}`}>{episodeStatusLabel(episode.status)}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Search this episode"
+                      onClick={() => onSearchEpisode(monitor.request.id, season.seasonNumber, episode.episodeNumber)}
+                    >
+                      <Search className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Download this episode"
+                      disabled={episode.status === "available" || episode.status === "downloading"}
+                      onClick={() => onGrabEpisode(monitor.request.id, season.seasonNumber, episode.episodeNumber)}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

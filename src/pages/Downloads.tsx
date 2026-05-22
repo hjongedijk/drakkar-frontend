@@ -11,12 +11,16 @@ import { useToast } from "../components/ToastProvider";
 export function Downloads() {
   const { notify } = useToast();
   const [tab, setTab] = useState<"queue" | "history">("queue");
+  const [queuePage, setQueuePage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const [url, setUrl] = useState("");
   const [urlTestResult, setUrlTestResult] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
-  const queue = useQuery({ queryKey: ["downloads", "queue"], queryFn: api.queue, refetchInterval: 5000, refetchOnWindowFocus: false });
-  const history = useQuery({ queryKey: ["downloads", "history"], queryFn: api.history, refetchInterval: 20000, refetchOnWindowFocus: false });
-  const status = useQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 5000, refetchOnWindowFocus: false });
+  const queueSummary = useQuery({ queryKey: ["downloads", "queue"], queryFn: api.queue, refetchInterval: 1000, refetchOnWindowFocus: false });
+  const queue = useQuery({ queryKey: ["downloads", "queue", queuePage], queryFn: () => api.queuePage(queuePage, 25), refetchInterval: 1000, refetchOnWindowFocus: false });
+  const history = useQuery({ queryKey: ["downloads", "history", historyPage], queryFn: () => api.historyPage(historyPage, 25), refetchInterval: 20000, refetchOnWindowFocus: false });
+  const status = useQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 2000, refetchOnWindowFocus: false });
+  const streamMetrics = useQuery({ queryKey: ["streams", "metrics"], queryFn: api.streamMetrics, refetchInterval: 1000, refetchOnWindowFocus: false });
   const addUrl = useRefreshMutation((value: string) => api.addUrl(value), [["downloads", "queue"]], { success: "NZB URL queued" });
   const testUrl = useRefreshMutation((value: string) => api.testNzbUrl(value), []);
   const addNzb = useRefreshMutation((file: File) => addNzbFile(file), [["downloads", "queue"]], { success: "NZB file queued" });
@@ -28,25 +32,38 @@ export function Downloads() {
   const remove = useRefreshMutation((id: string) => api.deleteDownload(id), [["downloads", "queue"], ["downloads", "history"]], { success: "Download deleted" });
   const cleanupHistory = useRefreshMutation(() => api.cleanupHistory(), [["downloads", "history"]], { success: "Download history cleaned up" });
 
-  const active = tab === "queue" ? queue.data : history.data;
+  const activePage = tab === "queue" ? queue.data : history.data;
+  const active = activePage?.items;
   const loading = tab === "queue" ? queue.isLoading : history.isLoading;
   const errored = tab === "queue" ? queue.isError : history.isError;
   const totalSpeedBytes = useMemo(
-    () => (queue.data ?? []).reduce((sum, download) => sum + Math.max(0, download.speedBytesSec || 0), 0),
-    [queue.data]
+    () => (queueSummary.data ?? []).reduce((sum, download) => sum + Math.max(0, download.speedBytesSec || 0), 0),
+    [queueSummary.data]
   );
+  const [streamSpeedBytes, setStreamSpeedBytes] = useState(0);
+  const streamSpeedRef = useRef<{ bytes: number; at: number } | null>(null);
+  useEffect(() => {
+    const bytes = streamMetrics.data?.bytesServed;
+    if (bytes == null) return;
+    const now = Date.now();
+    const previous = streamSpeedRef.current;
+    streamSpeedRef.current = { bytes, at: now };
+    if (!previous || now <= previous.at || bytes < previous.bytes) return;
+    setStreamSpeedBytes((bytes - previous.bytes) / ((now - previous.at) / 1000));
+  }, [streamMetrics.data?.bytesServed]);
+  const combinedSpeedBytes = totalSpeedBytes + streamSpeedBytes;
   const fastestDownload = useMemo(
-    () => [...(queue.data ?? [])].sort((a, b) => (b.speedBytesSec || 0) - (a.speedBytesSec || 0))[0],
-    [queue.data]
+    () => [...(queueSummary.data ?? [])].sort((a, b) => (b.speedBytesSec || 0) - (a.speedBytesSec || 0))[0],
+    [queueSummary.data]
   );
   const activeJobCount = useMemo(
-    () => (queue.data ?? []).filter((download) => ["downloading", "verifying", "prepared", "fetching_nzb"].includes(download.status)).length,
-    [queue.data]
+    () => (queueSummary.data ?? []).filter((download) => ["downloading", "verifying", "prepared", "fetching_nzb"].includes(download.status)).length,
+    [queueSummary.data]
   );
   const peakSpeedRef = useRef(0);
   useEffect(() => {
-    peakSpeedRef.current = Math.max(peakSpeedRef.current, totalSpeedBytes);
-  }, [totalSpeedBytes]);
+    peakSpeedRef.current = Math.max(peakSpeedRef.current, combinedSpeedBytes);
+  }, [combinedSpeedBytes]);
 
   return (
     <div className="space-y-5">
@@ -108,8 +125,8 @@ export function Downloads() {
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Current Throughput"
-          value={`${formatBytes(totalSpeedBytes)}/s`}
-          detail="Live sum of active Usenet job speeds"
+          value={`${formatBytes(combinedSpeedBytes)}/s`}
+          detail={`Downloads ${formatBytes(totalSpeedBytes)}/s · Streams ${formatBytes(streamSpeedBytes)}/s`}
         />
         <MetricCard
           label="Session Peak"
@@ -132,7 +149,9 @@ export function Downloads() {
 
       <div className="flex flex-wrap gap-2">
         {(["queue", "history"] as const).map((item) => (
-          <Button key={item} variant={tab === item ? "default" : "outline"} onClick={() => setTab(item)}>{item}</Button>
+          <Button key={item} variant={tab === item ? "default" : "outline"} onClick={() => setTab(item)}>
+            {item} {item === "queue" ? `(${queue.data?.total ?? queueSummary.data?.length ?? 0})` : `(${history.data?.total ?? 0})`}
+          </Button>
         ))}
         {tab === "history" ? (
           <Button
@@ -150,6 +169,17 @@ export function Downloads() {
 
       {loading && <LoadingState />}
       {errored && <ErrorState message="Could not load download data." />}
+      {activePage ? (
+        <PaginationBar
+          page={activePage.page}
+          totalPages={activePage.totalPages}
+          total={activePage.total}
+          label={tab === "queue" ? "queue items" : "history items"}
+          onPrev={() => tab === "queue" ? setQueuePage((page) => Math.max(1, page - 1)) : setHistoryPage((page) => Math.max(1, page - 1))}
+          onNext={() => tab === "queue" ? setQueuePage((page) => Math.min(activePage.totalPages, page + 1)) : setHistoryPage((page) => Math.min(activePage.totalPages, page + 1))}
+        />
+      ) : null}
+
       {active && (active.length === 0 ? <EmptyState message="Nothing here yet." /> : (
         <div className="space-y-3">
           {active.map((download) => (
@@ -166,6 +196,18 @@ export function Downloads() {
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+
+function PaginationBar({ page, totalPages, total, label, onPrev, onNext }: { page: number; totalPages: number; total: number; label: string; onPrev: () => void; onNext: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
+      <span className="text-muted-foreground">{total} {label} · page {page} of {totalPages}</span>
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={onPrev} disabled={page <= 1}>Previous</Button>
+        <Button variant="outline" onClick={onNext} disabled={page >= totalPages}>Next</Button>
+      </div>
     </div>
   );
 }
@@ -194,6 +236,7 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
 
 function DownloadRow({ download, onPause, onResume, onCancel, onRetry, onMakeAvailable, onDelete }: { download: DownloadType; onPause: (id: string) => void; onResume: (id: string) => void; onCancel: (id: string) => void; onRetry: (id: string) => void; onMakeAvailable: (id: string) => void; onDelete: (id: string) => void }) {
   const pct = Math.max(0, Math.min(100, download.progress || (download.size ? (download.downloaded / download.size) * 100 : 0)));
+  const active = ["downloading", "verifying", "fetching_nzb"].includes(download.status);
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -211,7 +254,10 @@ function DownloadRow({ download, onPause, onResume, onCancel, onRetry, onMakeAva
         </div>
       </div>
       <div className="mt-4 h-2 overflow-hidden rounded bg-muted">
-        <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full bg-primary transition-all ${active && pct < 1 ? "animate-pulse" : ""}`}
+          style={{ width: active && pct < 1 ? "3rem" : `${pct}%` }}
+        />
       </div>
       <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-between sm:gap-2">
         <span>{download.statusLabel ?? statusText(download.status)}</span>

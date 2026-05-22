@@ -5,6 +5,7 @@ import { AppLayout } from "../components/AppLayout";
 import { Dashboard } from "../pages/Dashboard";
 import { DetailsPage } from "../pages/Details";
 import { DiscoverPage } from "../pages/Discover";
+import { DiscoverSearchPage } from "../pages/DiscoverSearch";
 import { Downloads } from "../pages/Downloads";
 import { HealthPage } from "../pages/Health";
 import { Library } from "../pages/Library";
@@ -13,6 +14,8 @@ import { Profiles } from "../pages/Profiles";
 import { ReleaseCalendarPage } from "../pages/ReleaseCalendar";
 import { SearchPage } from "../pages/Search";
 import { Settings } from "../pages/Settings";
+import { SetupWizard } from "../pages/SetupWizard";
+import { TasksPage } from "../pages/Tasks";
 import { VfsBrowser } from "../pages/VfsBrowser";
 import { LoginPage } from "../pages/Login";
 import { LoadingState } from "../components/PageState";
@@ -51,6 +54,8 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "discover/:mediaType", element: <DiscoverPage /> },
+      { path: "discover/search", element: <DiscoverSearchPage /> },
+      { path: "details/:mediaType/:idSlug", element: <DetailsPage /> },
       { path: "details", element: <DetailsPage /> },
       { path: "requests", element: <Navigate to="/library" replace /> },
       { path: "search", element: <SearchPage /> },
@@ -60,7 +65,9 @@ export const router = createBrowserRouter([
       { path: "library", element: <Library /> },
       { path: "vfs", element: <VfsBrowser /> },
       { path: "profiles", element: <Profiles /> },
+      { path: "tasks", element: <TasksPage /> },
       { path: "settings", element: <Settings /> },
+      { path: "setup", element: <SetupWizard /> },
       { path: "logs", element: <Logs /> }
     ]
   }

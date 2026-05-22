@@ -1,5 +1,7 @@
 import { apiUrl, getFrontendApiToken } from "../config";
 
+const API_REQUEST_TIMEOUT_MS = 30000;
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -15,10 +17,15 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   const headers = new Headers(init.headers);
   if (init.body != null && !headers.has("content-type")) headers.set("content-type", "application/json");
   headers.set("x-api-token", getFrontendApiToken());
-  const response = await fetch(apiUrl(path), {
+  const response = await fetchWithTimeout(apiUrl(path), {
     ...init,
     credentials: "include",
     headers
+  }).catch((error) => {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("Request timed out or was aborted.", 408, null);
+    }
+    throw error;
   });
 
   const data = response.headers.get("content-type")?.includes("application/json")
@@ -36,10 +43,15 @@ export async function downloadBlob(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (init.body != null && !headers.has("content-type")) headers.set("content-type", "application/json");
   headers.set("x-api-token", getFrontendApiToken());
-  const response = await fetch(apiUrl(path), {
+  const response = await fetchWithTimeout(apiUrl(path), {
     ...init,
     credentials: "include",
     headers
+  }).catch((error) => {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("Request timed out or was aborted.", 408, null);
+    }
+    throw error;
   });
   if (!response.ok) {
     const data = response.headers.get("content-type")?.includes("application/json") ? await response.json() : null;
@@ -58,6 +70,26 @@ export function downloadFileUrl(path: string) {
 function filenameFromDisposition(disposition: string | null) {
   const match = disposition?.match(/filename="?([^"]+)"?/i);
   return match?.[1] ?? "release.nzb";
+}
+
+async function fetchWithTimeout(input: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const upstreamSignal = init.signal;
+
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) controller.abort();
+    else upstreamSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export type ApiStatus = {
@@ -125,7 +157,35 @@ export type DiscoverMediaItem = {
   overview?: string;
 };
 
+export type MediaDetails = DiscoverMediaItem & {
+  runtimeMinutes?: number;
+  status?: string;
+  tagline?: string;
+  genres: string[];
+  voteAverage?: number;
+  voteCount?: number;
+  popularity?: number;
+  originalLanguage?: string;
+  budget?: number;
+  revenue?: number;
+  productionCompanies: string[];
+  cast: Array<{
+    id?: string;
+    name: string;
+    character?: string;
+    profileUrl?: string;
+  }>;
+  recommendations: DiscoverMediaItem[];
+  similar: DiscoverMediaItem[];
+};
+
 export type DiscoverHomeResponse = {
+  movies: DiscoverMediaItem[];
+  tv: DiscoverMediaItem[];
+};
+
+export type DiscoverSearchResponse = {
+  query: string;
   movies: DiscoverMediaItem[];
   tv: DiscoverMediaItem[];
 };
@@ -224,6 +284,14 @@ export type Download = {
   updatedAt: string;
 };
 
+export type DownloadPage = {
+  items: Download[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export type NzbTestResult = {
   ok: boolean;
   looksLikeNzb?: boolean;
@@ -285,6 +353,8 @@ export type MediaRequest = {
   seasons?: unknown;
   episodes?: unknown;
   downloadId?: string | null;
+  createdAt: string;
+  updatedAt: string;
   download?: {
     id: string;
     status: string;
@@ -487,12 +557,28 @@ export type BandwidthStatus = {
   };
 };
 
+export type ScheduledTask = {
+  id: string;
+  name: string;
+  description: string;
+  intervalMs?: number | null;
+  enabled: boolean;
+  manualRunnable?: boolean;
+  status: "idle" | "running" | "success" | "failed" | "disabled";
+  lastStartedAt: string | null;
+  lastCompletedAt: string | null;
+  lastDurationMs: number | null;
+  nextRunAt: string | null;
+  lastError: string | null;
+};
+
 export type Settings = {
   nzbhydraUrl?: string;
   nzbhydraApiKey?: string;
   nzbhydraCategories: string[];
   nzbhydraTimeoutMs: number;
   nzbhydraCacheTtlSeconds: number;
+  nzbhydraFeedCacheTtlSeconds: number;
   backupNzbFiles: boolean;
   tmdbApiKey?: string;
   tvdbApiKey?: string;
@@ -500,6 +586,29 @@ export type Settings = {
   metadataCacheTtlHours: number;
   defaultMovieProfile: string;
   defaultTvProfile: string;
+  plexServerUrl?: string;
+  plexToken?: string;
+  plexLibraryPath: string;
+  plexSectionId?: string;
+  plexClientIdentifier: string;
+};
+
+export type PlexLibrary = {
+  key: string;
+  title: string;
+  type?: string;
+  locations: string[];
+};
+
+export type SetupStatus = {
+  completed: boolean;
+  checks: {
+    nzbhydra: boolean;
+    metadata: boolean;
+    requestProvider: boolean;
+    usenet: boolean;
+    plex: boolean;
+  };
 };
 
 export type RequestProvider = {
@@ -578,7 +687,20 @@ export type BlocklistItem = {
   title: string;
   reason: string;
   source?: string | null;
+  release?: unknown;
+  expiresAt?: string | null;
   createdAt: string;
+  updatedAt?: string;
+  active?: boolean;
+  expired?: boolean;
+};
+
+export type BlocklistStats = {
+  total: number;
+  active: number;
+  expired: number;
+  reasons: Record<string, number>;
+  sources: Record<string, number>;
 };
 
 export type NamingSettings = {
@@ -652,20 +774,45 @@ export const api = {
   status: getStatus,
   healthChecks: () => apiRequest<HealthChecksResponse>("/api/health/checks"),
   discoverHome: () => apiRequest<DiscoverHomeResponse>("/api/discover/home"),
+  discoverSearch: (query: string) => apiRequest<DiscoverSearchResponse>(`/api/discover/search?query=${encodeURIComponent(query)}`),
   discoverList: (mediaType: "movie" | "tv", page = 1) => apiRequest<DiscoverListResponse>(`/api/discover/${mediaType}?page=${page}`),
+  discoverDetails: (item: { mediaType: "movie" | "tv"; title?: string | null; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) => {
+    const params = new URLSearchParams();
+    if (item.title) params.set("title", item.title);
+    if (item.year) params.set("year", String(item.year));
+    if (item.tmdbId) params.set("tmdbId", item.tmdbId);
+    if (item.tvdbId) params.set("tvdbId", item.tvdbId);
+    if (item.imdbId) params.set("imdbId", item.imdbId);
+    return apiRequest<MediaDetails>(`/api/discover/details/${item.mediaType}?${params.toString()}`);
+  },
   releaseCalendar: (month?: string) => apiRequest<ReleaseCalendarResponse>(`/api/release-calendar${month ? `?month=${encodeURIComponent(month)}` : ""}`),
   settings: () => apiRequest<Settings>("/api/settings"),
   updateSettings: (settings: Settings) => apiRequest<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(settings) }),
+  setupStatus: () => apiRequest<SetupStatus>("/api/setup/status"),
+  completeSetup: () => apiRequest<{ ok: boolean }>("/api/setup/complete", { method: "POST", body: "{}" }),
+  plexLibraries: () => apiRequest<{ libraries: PlexLibrary[] }>("/api/plex/libraries"),
+  plexTest: () => apiRequest<{ ok: boolean; libraries: PlexLibrary[] }>("/api/plex/test", { method: "POST", body: "{}" }),
+  plexRefresh: (path: string) => apiRequest<unknown>("/api/plex/refresh", { method: "POST", body: JSON.stringify({ path }) }),
+  plexOauthStart: () => apiRequest<{ pinId: number; code: string; authUrl: string; clientIdentifier: string }>("/api/plex/oauth/start", { method: "POST", body: "{}" }),
+  plexOauthPoll: (pinId: number) => apiRequest<{ authorized: boolean; token?: string }>("/api/plex/oauth/poll", { method: "POST", body: JSON.stringify({ pinId }) }),
   resetEnvironment: () => apiRequest<{ ok: boolean; cleared: Record<string, unknown> }>("/api/system/reset-environment", { method: "POST", body: "{}" }),
   policies: () => apiRequest<PolicySettings>("/api/settings/policies"),
   updatePolicies: (policies: PolicySettings) => apiRequest<PolicySettings>("/api/settings/policies", { method: "PUT", body: JSON.stringify(policies) }),
   ignoredFiles: () => apiRequest<string[]>("/api/ignored-files"),
   updateIgnoredFiles: (patterns: string[]) => apiRequest<string[]>("/api/ignored-files", { method: "PUT", body: JSON.stringify(patterns) }),
   testIgnoredFile: (path: string) => apiRequest<{ path: string; ignored: boolean; matches: string[] }>("/api/ignored-files/test", { method: "POST", body: JSON.stringify({ path }) }),
-  blocklist: () => apiRequest<BlocklistItem[]>("/api/blocklist"),
-  addBlocklistItem: (item: { title: string; guid?: string; reason?: string; source?: string }) =>
+  blocklist: (query?: { q?: string; reason?: string; source?: string; state?: "all" | "active" | "expired"; limit?: number }) =>
+    apiRequest<BlocklistItem[]>(`/api/blocklist${query ? `?${new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])).toString()}` : ""}`),
+  blocklistStats: () => apiRequest<BlocklistStats>("/api/blocklist/stats"),
+  addBlocklistItem: (item: { title: string; guid?: string; reason?: string; source?: string; expiresAt?: string }) =>
     apiRequest<BlocklistItem>("/api/blocklist", { method: "POST", body: JSON.stringify(item) }),
+  updateBlocklistItem: (id: string, item: { title?: string; guid?: string | null; reason?: string; source?: string | null; expiresAt?: string | null }) =>
+    apiRequest<BlocklistItem>(`/api/blocklist/${id}`, { method: "PUT", body: JSON.stringify(item) }),
   deleteBlocklistItem: (id: string) => apiRequest<{ ok: boolean }>(`/api/blocklist/${id}`, { method: "DELETE" }),
+  clearBlocklistItems: () => apiRequest<{ deleted: number }>("/api/blocklist", { method: "DELETE" }),
+  cleanupExpiredBlocklistItems: () => apiRequest<{ deleted: number }>("/api/blocklist/cleanup-expired", { method: "POST", body: "{}" }),
+  matchBlocklistRelease: (release: { title: string; guid?: string }) =>
+    apiRequest<BlocklistItem[]>("/api/blocklist/match", { method: "POST", body: JSON.stringify(release) }),
   naming: () => apiRequest<NamingSettings>("/api/naming"),
   updateNaming: (naming: NamingSettings) => apiRequest<NamingSettings>("/api/naming", { method: "PUT", body: JSON.stringify(naming) }),
   previewNaming: (body: { media?: Record<string, unknown>; sourcePath?: string; strategy?: string }) =>
@@ -686,11 +833,17 @@ export const api = {
       body: JSON.stringify({ profileId, release })
     }),
   requests: () => apiRequest<MediaRequest[]>("/api/requests"),
+  createRequest: (item: { mediaType: "movie" | "tv"; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) =>
+    apiRequest<{ request: MediaRequest; seerr: { ok: boolean; status: number; body?: unknown } | null }>("/api/requests", { method: "POST", body: JSON.stringify(item) }),
   requestMonitor: (id: string) => apiRequest<RequestMonitor>(`/api/requests/${id}/monitor`),
   syncRequests: () => apiRequest<RequestSyncResult>("/api/requests/sync", { method: "POST", body: "{}" }),
   approveRequest: (id: string) => apiRequest<MediaRequest>(`/api/requests/${id}/approve`, { method: "POST" }),
   rejectRequest: (id: string) => apiRequest<MediaRequest>(`/api/requests/${id}/reject`, { method: "POST" }),
   searchRequest: (id: string) => apiRequest<{ releases: RequestReleaseCandidate[] }>(`/api/requests/${id}/search`, { method: "POST" }),
+  searchRequestEpisode: (id: string, season: number, episode: number) =>
+    apiRequest<{ releases: RequestReleaseCandidate[] }>(`/api/requests/${id}/episodes/${season}/${episode}/search`, { method: "POST" }),
+  grabRequestEpisode: (id: string, season: number, episode: number) =>
+    apiRequest<unknown>(`/api/requests/${id}/episodes/${season}/${episode}/download`, { method: "POST" }),
   grabRequest: (id: string) => apiRequest<unknown>(`/api/requests/${id}/download`, { method: "POST" }),
   grabRequestRelease: (id: string, release: Release) =>
     apiRequest<unknown>(`/api/requests/${id}/grab-release`, { method: "POST", body: JSON.stringify({ release }) }),
@@ -702,7 +855,9 @@ export const api = {
   downloadNzbFile: (release: Release) =>
     downloadBlob("/api/search/download-nzb-file", { method: "POST", body: JSON.stringify({ release }) }),
   queue: () => apiRequest<Download[]>("/api/downloads/queue"),
+  queuePage: (page = 1, limit = 25) => apiRequest<DownloadPage>(`/api/downloads/queue/page?page=${page}&limit=${limit}`),
   history: () => apiRequest<Download[]>("/api/downloads/history"),
+  historyPage: (page = 1, limit = 25) => apiRequest<DownloadPage>(`/api/downloads/history/page?page=${page}&limit=${limit}`),
   cleanupHistory: () => apiRequest<{ deleted: number; cleanedFailedJobs: number; keptFailed: number; keptCancelled: number }>("/api/downloads/history/cleanup", { method: "POST", body: JSON.stringify({ keepFailed: 0, keepCancelled: 0 }) }),
   addUrl: (url: string, title?: string) => apiRequest<Download>("/api/downloads/add-url", { method: "POST", body: JSON.stringify({ url, title }) }),
   testNzbUrl: (url: string, title?: string) => apiRequest<NzbTestResult>("/api/downloads/test-nzb-url", { method: "POST", body: JSON.stringify({ url, title }) }),
@@ -725,6 +880,8 @@ export const api = {
   stopStream: (id: string) => apiRequest<{ ok: boolean }>(`/api/vfs/streams/${id}/stop`, { method: "POST" }),
   fuseStatus: () => apiRequest<FuseStatus>("/api/vfs/fuse"),
   bandwidthStatus: () => apiRequest<BandwidthStatus>("/api/vfs/bandwidth"),
+  tasks: () => apiRequest<{ tasks: ScheduledTask[] }>("/api/tasks"),
+  runTask: (id: string) => apiRequest<{ task: ScheduledTask | null; skipped: boolean; reason?: string }>(`/api/tasks/${id}/run`, { method: "POST", body: "{}" }),
   refreshVfs: () => apiRequest<{ ok: boolean }>("/api/vfs/refresh", { method: "POST" }),
   imports: () => apiRequest<ImportItem[]>("/api/imports"),
   symlinks: () => apiRequest<SymlinkItem[]>("/api/symlinks"),

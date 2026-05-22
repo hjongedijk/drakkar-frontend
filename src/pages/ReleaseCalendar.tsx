@@ -6,6 +6,7 @@ import { api, type ReleaseCalendarEntry } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { detailsHref } from "../lib/detailsHref";
 
 const typeStyles: Record<ReleaseCalendarEntry["type"], string> = {
   movie: "border-cyan-400/30 bg-cyan-500/15 text-cyan-100",
@@ -238,19 +239,6 @@ function calendarTitle(entry: ReleaseCalendarEntry) {
     return `${entry.seriesTitle ?? entry.title} S${String(entry.seasonNumber).padStart(2, "0")}E${String(entry.episodeNumber).padStart(2, "0")}`;
   }
   return entry.title;
-}
-
-function detailsHref(entry: ReleaseCalendarEntry) {
-  const params = new URLSearchParams({
-    mediaType: entry.mediaType,
-    title: entry.seriesTitle ?? entry.title
-  });
-  if (entry.year) params.set("year", String(entry.year));
-  if (entry.tmdbId) params.set("tmdbId", entry.tmdbId);
-  if (entry.tvdbId) params.set("tvdbId", entry.tvdbId);
-  if (entry.imdbId) params.set("imdbId", entry.imdbId);
-  if (entry.overview) params.set("overview", entry.overview);
-  return `/details?${params.toString()}`;
 }
 
 function parseMonth(month: string) {

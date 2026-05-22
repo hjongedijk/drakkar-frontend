@@ -2,6 +2,7 @@ import {
   Activity,
   Bell,
   CalendarDays,
+  ClipboardList,
   Download,
   FileSearch,
   FolderTree,
@@ -12,6 +13,7 @@ import {
   Menu,
   Moon,
   ScrollText,
+  Sparkles,
   Settings,
   SlidersHorizontal,
   SunMedium,
@@ -35,10 +37,12 @@ const navItems = [
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/downloads", label: "Queue", icon: Download },
   { to: "/health", label: "Health", icon: HeartPulse },
+  { to: "/tasks", label: "Tasks", icon: ClipboardList },
   { to: "/profiles", label: "Quality", icon: SlidersHorizontal },
   { to: "/vfs", label: "Files", icon: FolderTree },
   { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/setup", label: "Setup", icon: Sparkles },
 ];
 
 export function AppLayout() {
@@ -96,12 +100,12 @@ export function AppLayout() {
             <FileSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               className="h-11 w-full rounded-2xl border border-cyan-300/10 bg-cyan-50/[0.045] px-11 text-sm font-semibold outline-none transition placeholder:text-muted-foreground focus:border-primary/50 focus:bg-cyan-50/[0.075]"
-              placeholder="Search releases, requests, mounted files..."
+              placeholder="Search movies, shows, people..."
               value={globalSearch}
               onChange={(event) => setGlobalSearch(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key !== "Enter" || !globalSearch.trim()) return;
-                navigate(`/search?q=${encodeURIComponent(globalSearch.trim())}`);
+                navigate(`/discover/search?q=${encodeURIComponent(globalSearch.trim())}`);
               }}
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-muted-foreground">^K</span>

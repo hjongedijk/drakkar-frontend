@@ -62,6 +62,19 @@ const queueDecisionLabels = {
   search_again: "Search Again"
 } as const;
 
+const blockReasonOptions = [
+  "manual",
+  "duplicate_nzb",
+  "no_video_content",
+  "missing_articles",
+  "repair_failed",
+  "passworded_archive",
+  "quality_rejected",
+  "ignored_file_only",
+  "unsupported_archive",
+  "import_failed"
+] as const;
+
 const settingsTabs: Array<{ value: SettingsTab; label: string; short: string; icon: typeof PlugZap }> = [
   { value: "integrations", label: "Integrations", short: "Apps", icon: PlugZap },
   { value: "providers", label: "Providers", short: "Feeds", icon: Wifi },
@@ -81,12 +94,25 @@ export function Settings() {
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const policies = useQuery({ queryKey: ["policies"], queryFn: api.policies });
   const ignoredFiles = useQuery({ queryKey: ["ignored-files"], queryFn: api.ignoredFiles });
-  const blocklist = useQuery({ queryKey: ["blocklist"], queryFn: api.blocklist });
+  const [blockQuery, setBlockQuery] = useState("");
+  const [blockReasonFilter, setBlockReasonFilter] = useState("all");
+  const [blockStateFilter, setBlockStateFilter] = useState<"all" | "active" | "expired">("active");
+  const blocklist = useQuery({
+    queryKey: ["blocklist", blockQuery, blockReasonFilter, blockStateFilter],
+    queryFn: () => api.blocklist({
+      q: blockQuery || undefined,
+      reason: blockReasonFilter === "all" ? undefined : blockReasonFilter,
+      state: blockStateFilter,
+      limit: 200
+    })
+  });
+  const blocklistStats = useQuery({ queryKey: ["blocklist", "stats"], queryFn: api.blocklistStats });
   const naming = useQuery({ queryKey: ["naming"], queryFn: api.naming });
   const authTokens = useQuery({ queryKey: ["auth", "tokens"], queryFn: api.authTokens });
   const [draft, setDraft] = useState<SettingsType | null>(null);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("integrations");
   const [policyDraft, setPolicyDraft] = useState<Awaited<ReturnType<typeof api.policies>> | null>(null);
+  const [showAdvancedQueue, setShowAdvancedQueue] = useState(false);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editingProvider, setEditingProvider] = useState<RequestProviderInput | null>(null);
   const [editingUsenetId, setEditingUsenetId] = useState<string | null>(null);
@@ -96,7 +122,14 @@ export function Settings() {
   const [ignoredDraft, setIgnoredDraft] = useState("");
   const [ignoredTestPath, setIgnoredTestPath] = useState("");
   const [ignoredTestResult, setIgnoredTestResult] = useState<string | null>(null);
-  const [blockTitle, setBlockTitle] = useState("");
+  const [blockForm, setBlockForm] = useState({
+    id: "",
+    title: "",
+    guid: "",
+    reason: "manual",
+    source: "settings",
+    expiresAt: ""
+  });
   const [requestProvider, setRequestProvider] = useState<RequestProviderInput>(defaultRequestProvider);
   const [usenetServer, setUsenetServer] = useState<UsenetServerInput>(defaultUsenetServer);
   const [profileDraft, setProfileDraft] = useState({ username: user?.username ?? "admin", displayName: user?.displayName ?? "admin" });
@@ -104,6 +137,8 @@ export function Settings() {
   const [tokenName, setTokenName] = useState("");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [plexMessage, setPlexMessage] = useState<string | null>(null);
+  const [plexPin, setPlexPin] = useState<{ pinId: number; code: string; authUrl: string } | null>(null);
   const save = useMutation({
     mutationFn: (value: SettingsType) => api.updateSettings(value),
     onSuccess: () => {
@@ -147,21 +182,63 @@ export function Settings() {
     onSuccess: (result) => setIgnoredTestResult(result.ignored ? `Ignored by ${result.matches.join(", ")}` : "Not ignored")
   });
   const addBlock = useMutation({
-    mutationFn: (title: string) => api.addBlocklistItem({ title, reason: "manual", source: "settings" }),
+    mutationFn: () => api.addBlocklistItem({
+      title: blockForm.title,
+      guid: blockForm.guid || undefined,
+      reason: blockForm.reason,
+      source: blockForm.source || undefined,
+      expiresAt: blockForm.expiresAt ? new Date(blockForm.expiresAt).toISOString() : undefined
+    }),
     onSuccess: () => {
       notify("Blocklist item added");
-      setBlockTitle("");
+      setBlockForm({ id: "", title: "", guid: "", reason: "manual", source: "settings", expiresAt: "" });
       queryClient.invalidateQueries({ queryKey: ["blocklist"] });
+      queryClient.invalidateQueries({ queryKey: ["blocklist", "stats"] });
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not add blocklist item")
+  });
+  const updateBlock = useMutation({
+    mutationFn: () => api.updateBlocklistItem(blockForm.id, {
+      title: blockForm.title || undefined,
+      guid: blockForm.guid || null,
+      reason: blockForm.reason,
+      source: blockForm.source || null,
+      expiresAt: blockForm.expiresAt ? new Date(blockForm.expiresAt).toISOString() : null
+    }),
+    onSuccess: () => {
+      notify("Blocklist item updated");
+      setBlockForm({ id: "", title: "", guid: "", reason: "manual", source: "settings", expiresAt: "" });
+      queryClient.invalidateQueries({ queryKey: ["blocklist"] });
+      queryClient.invalidateQueries({ queryKey: ["blocklist", "stats"] });
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not update blocklist item")
   });
   const deleteBlock = useMutation({
     mutationFn: (id: string) => api.deleteBlocklistItem(id),
     onSuccess: () => {
       notify("Blocklist item removed");
       queryClient.invalidateQueries({ queryKey: ["blocklist"] });
+      queryClient.invalidateQueries({ queryKey: ["blocklist", "stats"] });
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not remove blocklist item")
+  });
+  const cleanupExpiredBlocklist = useMutation({
+    mutationFn: () => api.cleanupExpiredBlocklistItems(),
+    onSuccess: (result) => {
+      notify(`Removed ${result.deleted} expired blocklist item${result.deleted === 1 ? "" : "s"}`);
+      queryClient.invalidateQueries({ queryKey: ["blocklist"] });
+      queryClient.invalidateQueries({ queryKey: ["blocklist", "stats"] });
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not clean expired blocklist items")
+  });
+  const clearBlocklist = useMutation({
+    mutationFn: () => api.clearBlocklistItems(),
+    onSuccess: (result) => {
+      notify(`Cleared ${result.deleted} blocklist item${result.deleted === 1 ? "" : "s"}`);
+      queryClient.invalidateQueries({ queryKey: ["blocklist"] });
+      queryClient.invalidateQueries({ queryKey: ["blocklist", "stats"] });
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not clear blocklist")
   });
   const createProvider = useMutation({
     mutationFn: (value: RequestProviderInput) => api.createRequestProvider(cleanRequestProvider(value)),
@@ -264,6 +341,33 @@ export function Settings() {
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not clear environment")
   });
+  const testPlex = useMutation({
+    mutationFn: () => api.plexTest(),
+    onSuccess: (result) => setPlexMessage(`Connected. ${result.libraries.length} Plex libraries found.`),
+    onError: (error) => setPlexMessage(error instanceof Error ? error.message : "Plex test failed")
+  });
+  const startPlexOauth = useMutation({
+    mutationFn: () => api.plexOauthStart(),
+    onSuccess: (result) => {
+      setPlexPin(result);
+      window.open(result.authUrl, "_blank", "noopener,noreferrer");
+      setPlexMessage(`Plex PIN ${result.code} opened in new tab. Approve, then click Poll.`);
+    },
+    onError: (error) => setPlexMessage(error instanceof Error ? error.message : "Could not start Plex OAuth")
+  });
+  const pollPlexOauth = useMutation({
+    mutationFn: (pinId: number) => api.plexOauthPoll(pinId),
+    onSuccess: (result) => {
+      if (!result.authorized) {
+        setPlexMessage("Plex PIN not approved yet.");
+        return;
+      }
+      setPlexMessage("Plex token saved.");
+      setPlexPin(null);
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (error) => setPlexMessage(error instanceof Error ? error.message : "Could not poll Plex OAuth")
+  });
 
   useEffect(() => {
     if (settings.data) setDraft(settings.data);
@@ -319,8 +423,24 @@ export function Settings() {
   const downloadConnectionBudget = Math.max(0, Number(policyDraft.maxDownloadConnections) || 0);
   const streamingConnectionBudget = Math.max(0, Number(policyDraft.maxStreamingConnections) || 0);
   const usedConnectionBudget = downloadConnectionBudget + streamingConnectionBudget;
-  const remainingConnectionBudget = Math.max(0, totalConnectionBudget - usedConnectionBudget);
   const overConnectionBudget = usedConnectionBudget > totalConnectionBudget;
+  const streamingReserve = policyDraft.streamingPriority > 0 ? Math.max(1, Math.floor(totalConnectionBudget * (policyDraft.streamingPriority / 100))) : 0;
+  const queueWhileStreaming = Math.min(downloadConnectionBudget, Math.max(0, totalConnectionBudget - streamingReserve));
+  const applyQueuePreset = (preset: "balanced" | "streaming" | "downloads") => {
+    const total = Math.max(1, totalConnectionBudget);
+    if (preset === "streaming") {
+      const streaming = Math.min(total, Math.max(6, Math.ceil(total * 0.35)));
+      setPolicyDraft({ ...policyDraft, streamingPriority: 85, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(1, total - streaming) });
+      return;
+    }
+    if (preset === "downloads") {
+      const streaming = Math.min(total, Math.max(3, Math.ceil(total * 0.15)));
+      setPolicyDraft({ ...policyDraft, streamingPriority: 65, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(1, total - streaming) });
+      return;
+    }
+    const streaming = Math.min(total, Math.max(6, Math.ceil(total * 0.2)));
+    setPolicyDraft({ ...policyDraft, streamingPriority: 80, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(1, total - streaming) });
+  };
 
   return (
     <div className="space-y-5">
@@ -354,7 +474,8 @@ export function Settings() {
         <SettingsCard title="NZBHydra2" tab="integrations" activeTab={settingsTab}>
           <LabeledInput label="URL" value={draft.nzbhydraUrl ?? ""} onChange={(value) => setDraft({ ...draft, nzbhydraUrl: value })} />
           <LabeledInput label="API key" value={draft.nzbhydraApiKey ?? ""} onChange={(value) => setDraft({ ...draft, nzbhydraApiKey: value })} />
-          <LabeledInput label="Cache TTL" type="number" value={String(draft.nzbhydraCacheTtlSeconds)} onChange={(value) => setDraft({ ...draft, nzbhydraCacheTtlSeconds: Number(value) })} />
+          <LabeledInput label="Search cache TTL" type="number" value={String(draft.nzbhydraCacheTtlSeconds)} onChange={(value) => setDraft({ ...draft, nzbhydraCacheTtlSeconds: Number(value) })} />
+          <LabeledInput label="RSS/update cache TTL" type="number" value={String(draft.nzbhydraFeedCacheTtlSeconds)} onChange={(value) => setDraft({ ...draft, nzbhydraFeedCacheTtlSeconds: Number(value) })} />
           <CheckboxLabel label="Backup working NZBs to nzb-backup/" checked={draft.backupNzbFiles} onChange={(checked) => setDraft({ ...draft, backupNzbFiles: checked })} />
         </SettingsCard>
         <SettingsCard title="Default Quality Profiles" tab="integrations" activeTab={settingsTab}>
@@ -367,6 +488,26 @@ export function Settings() {
               {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
             </LabeledSelect>
           </div>
+        </SettingsCard>
+        <SettingsCard title="Plex" tab="integrations" activeTab={settingsTab}>
+          <p className="text-sm text-muted-foreground">Targeted refresh scans only the added file/folder path after import, not whole library.</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <LabeledInput label="Plex server URL" value={draft.plexServerUrl ?? ""} onChange={(value) => setDraft({ ...draft, plexServerUrl: value })} />
+            <LabeledInput label="Plex token" type="password" value={draft.plexToken ?? ""} onChange={(value) => setDraft({ ...draft, plexToken: value })} />
+            <LabeledInput label="Plex library path" value={draft.plexLibraryPath ?? "/mnt/media"} onChange={(value) => setDraft({ ...draft, plexLibraryPath: value || "/mnt/media" })} />
+            <LabeledInput label="Section ID (optional)" value={draft.plexSectionId ?? ""} onChange={(value) => setDraft({ ...draft, plexSectionId: value })} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => testPlex.mutate()} disabled={testPlex.isPending}>Test Plex</Button>
+            <Button variant="outline" onClick={() => startPlexOauth.mutate()} disabled={startPlexOauth.isPending}>Get token with Plex</Button>
+            {plexPin ? <Button variant="outline" onClick={() => pollPlexOauth.mutate(plexPin.pinId)} disabled={pollPlexOauth.isPending}>Poll PIN {plexPin.code}</Button> : null}
+          </div>
+          {plexPin ? (
+            <a className="block text-xs font-semibold text-primary underline" href={plexPin.authUrl} target="_blank" rel="noreferrer">
+              Open Plex auth page for PIN {plexPin.code}
+            </a>
+          ) : null}
+          {plexMessage ? <p className="text-xs text-muted-foreground">{plexMessage}</p> : null}
         </SettingsCard>
         <SettingsCard title="Seerr" tab="providers" activeTab={settingsTab}>
           <div className="space-y-2">
@@ -576,24 +717,26 @@ export function Settings() {
         </SettingsCard>
         <SettingsCard title="Queue Management" tab="queue" activeTab={settingsTab}>
           <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
-            Max total connections auto-syncs from enabled Usenet providers. Example: 2 providers x 4 connections = 8 total. Download and streaming limits share that total budget.
+            Total connections come from enabled Usenet providers. Streaming keeps protected capacity; queue uses leftover connections instead of stopping completely.
           </div>
-          <div className={`rounded-xl border p-3 text-sm ${overConnectionBudget ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border/60 bg-background/50 text-foreground"}`}>
-            <p className="font-medium">Download + Streaming must stay within Total.</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Total {totalConnectionBudget} = Download {downloadConnectionBudget} + Streaming {streamingConnectionBudget}{remainingConnectionBudget > 0 ? ` + ${remainingConnectionBudget} unused` : ""}
-            </p>
+          <div className={`grid gap-2 rounded-xl border p-3 text-sm md:grid-cols-4 ${overConnectionBudget ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border/60 bg-background/50 text-foreground"}`}>
+            <MetricCard label="Provider total" value={String(totalConnectionBudget)} />
+            <MetricCard label="Queue max" value={String(downloadConnectionBudget)} />
+            <MetricCard label="Stream max" value={String(streamingConnectionBudget)} />
+            <MetricCard label="Queue while streaming" value={String(queueWhileStreaming)} />
             {overConnectionBudget ? <p className="mt-2 text-xs font-medium">Over budget by {usedConnectionBudget - totalConnectionBudget}. Backend will clamp values on save.</p> : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => applyQueuePreset("balanced")}>Balanced</Button>
+            <Button variant="outline" onClick={() => applyQueuePreset("streaming")}>Streaming first</Button>
+            <Button variant="outline" onClick={() => applyQueuePreset("downloads")}>Download first</Button>
+            <Button variant="ghost" onClick={() => setShowAdvancedQueue((value) => !value)}>{showAdvancedQueue ? "Hide advanced" : "Show advanced"}</Button>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput label="Streaming priority" type="number" value={String(policyDraft.streamingPriority)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamingPriority: Number(value) })} />
             <LabeledInput label="Max download connections" type="number" value={String(policyDraft.maxDownloadConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxDownloadConnections: Number(value) })} />
             <LabeledInput label="Max streaming connections" type="number" value={String(policyDraft.maxStreamingConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxStreamingConnections: Number(value) })} />
             <LabeledInput label="Max total connections" type="number" value={String(policyDraft.maxTotalUsenetConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxTotalUsenetConnections: Number(value) })} disabled />
-            <LabeledInput label="Stream chunk bytes" type="number" value={String(policyDraft.streamChunkSizeBytes)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamChunkSizeBytes: Number(value) })} />
-            <LabeledInput label="Read-ahead bytes" type="number" value={String(policyDraft.streamReadAheadBytes)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamReadAheadBytes: Number(value) })} />
-            <LabeledInput label="Memory cache max GB" type="number" value={String(policyDraft.streamCacheMaxSizeGb)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamCacheMaxSizeGb: Number(value) })} />
-            <LabeledInput label="Memory cache max hours" type="number" value={String(policyDraft.streamCacheMaxAgeHours)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamCacheMaxAgeHours: Number(value) })} />
             <LabeledSelect label="Duplicate NZB" value={policyDraft.duplicateNzbBehavior} onChange={(value) => setPolicyDraft({ ...policyDraft, duplicateNzbBehavior: value as typeof policyDraft.duplicateNzbBehavior })}>
               <option value="mark_failed">Mark failed</option>
               <option value="ignore_existing">Ignore existing</option>
@@ -605,10 +748,18 @@ export function Settings() {
               <option value="strm">STRM</option>
               <option value="copy">Copy</option>
             </LabeledSelect>
-            <LabeledInput label="Manual upload category" value={policyDraft.manualUploadCategory} onChange={(value) => setPolicyDraft({ ...policyDraft, manualUploadCategory: value })} />
-            <CheckboxLabel label="Memory stream cache" checked={policyDraft.streamCacheEnabled} onChange={(checked) => setPolicyDraft({ ...policyDraft, streamCacheEnabled: checked })} />
             <CheckboxLabel label="Fail NZBs without video" checked={policyDraft.failNzbWithoutVideo} onChange={(checked) => setPolicyDraft({ ...policyDraft, failNzbWithoutVideo: checked })} />
           </div>
+          {showAdvancedQueue ? (
+            <div className="grid gap-2 rounded-xl border bg-background/50 p-3 md:grid-cols-2">
+              <LabeledInput label="Stream chunk bytes" type="number" value={String(policyDraft.streamChunkSizeBytes)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamChunkSizeBytes: Number(value) })} />
+              <LabeledInput label="Read-ahead bytes" type="number" value={String(policyDraft.streamReadAheadBytes)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamReadAheadBytes: Number(value) })} />
+              <LabeledInput label="Memory cache max GB" type="number" value={String(policyDraft.streamCacheMaxSizeGb)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamCacheMaxSizeGb: Number(value) })} />
+              <LabeledInput label="Memory cache max hours" type="number" value={String(policyDraft.streamCacheMaxAgeHours)} onChange={(value) => setPolicyDraft({ ...policyDraft, streamCacheMaxAgeHours: Number(value) })} />
+              <LabeledInput label="Manual upload category" value={policyDraft.manualUploadCategory} onChange={(value) => setPolicyDraft({ ...policyDraft, manualUploadCategory: value })} />
+              <CheckboxLabel label="Memory stream cache" checked={policyDraft.streamCacheEnabled} onChange={(checked) => setPolicyDraft({ ...policyDraft, streamCacheEnabled: checked })} />
+            </div>
+          ) : null}
           <div className="space-y-3 rounded-xl border bg-background/50 p-3">
             <h3 className="text-sm font-semibold">Import decision actions</h3>
             <p className="text-xs text-muted-foreground">Controls for what the queue should do when a grabbed release cannot be imported cleanly.</p>
@@ -660,18 +811,84 @@ export function Settings() {
           {ignoredTestResult ? <p className="text-xs text-muted-foreground">{ignoredTestResult}</p> : null}
         </SettingsCard>
         <SettingsCard title="Blocklist" tab="rules" activeTab={settingsTab}>
-          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-            <Input value={blockTitle} onChange={(event) => setBlockTitle(event.target.value)} placeholder="Release title" />
-            <Button onClick={() => addBlock.mutate(blockTitle)} disabled={!blockTitle.trim()}><Plus className="mr-2 h-4 w-4" />Block</Button>
+          <div className="grid gap-2 md:grid-cols-4">
+            <MetricCard label="Total" value={String(blocklistStats.data?.total ?? 0)} />
+            <MetricCard label="Active" value={String(blocklistStats.data?.active ?? 0)} />
+            <MetricCard label="Expired" value={String(blocklistStats.data?.expired ?? 0)} />
+            <MetricCard label="Top reason" value={topCountLabel(blocklistStats.data?.reasons)} />
           </div>
-          <div className="max-h-72 space-y-2 overflow-auto">
+          <div className="grid gap-2 md:grid-cols-5">
+            <Input value={blockForm.title} onChange={(event) => setBlockForm({ ...blockForm, title: event.target.value })} placeholder="Release title" />
+            <Input value={blockForm.guid} onChange={(event) => setBlockForm({ ...blockForm, guid: event.target.value })} placeholder="GUID optional" />
+            <Select value={blockForm.reason} onChange={(event) => setBlockForm({ ...blockForm, reason: event.target.value })}>
+              {blockReasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+            </Select>
+            <Input value={blockForm.source} onChange={(event) => setBlockForm({ ...blockForm, source: event.target.value })} placeholder="Source optional" />
+            <Input type="datetime-local" value={blockForm.expiresAt} onChange={(event) => setBlockForm({ ...blockForm, expiresAt: event.target.value })} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => addBlock.mutate()} disabled={!blockForm.title.trim() || !!blockForm.id}><Plus className="mr-2 h-4 w-4" />Block</Button>
+            <Button variant="outline" onClick={() => updateBlock.mutate()} disabled={!blockForm.id || !blockForm.title.trim()}><Save className="mr-2 h-4 w-4" />Update</Button>
+            <Button variant="outline" onClick={() => setBlockForm({ id: "", title: "", guid: "", reason: "manual", source: "settings", expiresAt: "" })} disabled={!blockForm.id && !blockForm.title && !blockForm.guid && blockForm.reason === "manual" && blockForm.source === "settings" && !blockForm.expiresAt}><X className="mr-2 h-4 w-4" />Clear</Button>
+            <Button variant="outline" onClick={() => cleanupExpiredBlocklist.mutate()} disabled={cleanupExpiredBlocklist.isPending}>Clean expired</Button>
+            <Button
+              variant="outline"
+              className="border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20"
+              onClick={() => {
+                if (!window.confirm("Clear only the blocklist? Downloads, library, and settings stay untouched.")) return;
+                clearBlocklist.mutate();
+              }}
+              disabled={clearBlocklist.isPending || (blocklistStats.data?.total ?? 0) === 0}
+            >
+              Clear blocklist only
+            </Button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-[1fr_180px_160px]">
+            <Input value={blockQuery} onChange={(event) => setBlockQuery(event.target.value)} placeholder="Search title or GUID" />
+            <Select value={blockReasonFilter} onChange={(event) => setBlockReasonFilter(event.target.value)}>
+              <option value="all">All reasons</option>
+              {blockReasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+            </Select>
+            <Select value={blockStateFilter} onChange={(event) => setBlockStateFilter(event.target.value as "all" | "active" | "expired")}>
+              <option value="active">Active only</option>
+              <option value="all">All states</option>
+              <option value="expired">Expired only</option>
+            </Select>
+          </div>
+          <div className="max-h-80 space-y-2 overflow-auto">
             {(blocklist.data ?? []).map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">{item.reason}{item.source ? ` · ${item.source}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.reason}
+                    {item.source ? ` · ${item.source}` : ""}
+                    {item.guid ? ` · ${item.guid}` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.expired ? "Expired" : "Active"}
+                    {item.expiresAt ? ` · expires ${formatDateTime(item.expiresAt)}` : " · no expiry"}
+                    {item.createdAt ? ` · added ${formatDateTime(item.createdAt)}` : ""}
+                  </p>
                 </div>
-                <Button variant="ghost" size="icon" title="Delete blocklist item" onClick={() => deleteBlock.mutate(item.id)}><Trash2 className="h-4 w-4" /></Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Edit blocklist item"
+                    onClick={() => setBlockForm({
+                      id: item.id,
+                      title: item.title,
+                      guid: item.guid ?? "",
+                      reason: item.reason,
+                      source: item.source ?? "",
+                      expiresAt: item.expiresAt ? toDateTimeLocalValue(item.expiresAt) : ""
+                    })}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" title="Delete blocklist item" onClick={() => deleteBlock.mutate(item.id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
               </div>
             ))}
           </div>
@@ -716,6 +933,34 @@ function LabeledSelect({ label, value, onChange, children }: { label: string; va
 
 function CheckboxLabel({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />{label}</label>;
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function topCountLabel(values?: Record<string, number>) {
+  if (!values) return "0";
+  const [top] = Object.entries(values).sort((a, b) => b[1] - a[1]);
+  return top ? `${top[0]} (${top[1]})` : "0";
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function toDateTimeLocalValue(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (input: number) => String(input).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function cleanRequestProvider(provider: RequestProviderInput) {

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Button } from "../components/ui/button";
+import { detailsHref } from "../lib/detailsHref";
 
 export function DiscoverPage() {
   const params = useParams<{ mediaType: string }>();
@@ -69,29 +70,4 @@ function dedupeDiscoverItems<T extends { mediaType: string; tmdbId?: string; tvd
     seen.add(key);
     return true;
   });
-}
-
-function detailsHref(item: {
-  mediaType: string;
-  title: string;
-  year?: number | null;
-  tmdbId?: string | null;
-  tvdbId?: string | null;
-  imdbId?: string | null;
-  posterUrl?: string | null;
-  backdropUrl?: string | null;
-  overview?: string | null;
-}) {
-  const params = new URLSearchParams({
-    mediaType: item.mediaType,
-    title: item.title
-  });
-  if (item.year) params.set("year", String(item.year));
-  if (item.tmdbId) params.set("tmdbId", item.tmdbId);
-  if (item.tvdbId) params.set("tvdbId", item.tvdbId);
-  if (item.imdbId) params.set("imdbId", item.imdbId);
-  if (item.posterUrl) params.set("posterUrl", item.posterUrl);
-  if (item.backdropUrl) params.set("backdropUrl", item.backdropUrl);
-  if (item.overview) params.set("overview", item.overview);
-  return `/details?${params.toString()}`;
 }

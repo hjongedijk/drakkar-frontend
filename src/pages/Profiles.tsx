@@ -16,7 +16,7 @@ import {
 } from "../lib/profile-ranking";
 
 const qualityOptions = ["480p", "720p", "1080p", "2160p"];
-const languageOptions = ["english", "multi", "dual", "french", "german", "spanish", "japanese"];
+const languageOptions = ["english", "dutch", "multi", "dual", "french", "german", "spanish", "japanese"];
 
 export function Profiles() {
   const [title, setTitle] = useState("Example.Movie.2026.1080p.WEB-DL.x265-GROUP");

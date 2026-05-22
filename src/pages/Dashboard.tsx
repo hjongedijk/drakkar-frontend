@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type DiscoverMediaItem, type MediaLibraryItem } from "../api/client";
+import { DraggableScroller } from "../components/DraggableScroller";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
+import { detailsHref } from "../lib/detailsHref";
 
 export function Dashboard() {
   const [heroIndex, setHeroIndex] = useState(0);
@@ -16,9 +18,9 @@ export function Dashboard() {
   );
   const recentlyAdded = useMemo(
     () =>
-      availableLibrary
+      uniqueLibraryTitles(availableLibrary
         .filter((item) => item.sourceKey.startsWith("import:"))
-        .sort(compareRecentlyAdded)
+        .sort(compareRecentlyAdded))
         .slice(0, 12),
     [availableLibrary]
   );
@@ -172,35 +174,6 @@ function normalizeTitle(value: string) {
   return value.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function detailsHref(item: {
-  mediaType: string;
-  title: string;
-  year?: number | null;
-  tmdbId?: string | null;
-  tvdbId?: string | null;
-  imdbId?: string | null;
-  season?: number | null;
-  episode?: number | null;
-  posterUrl?: string | null;
-  backdropUrl?: string | null;
-  overview?: string | null;
-}) {
-  const params = new URLSearchParams({
-    mediaType: item.mediaType,
-    title: item.title
-  });
-  if (item.year) params.set("year", String(item.year));
-  if (item.tmdbId) params.set("tmdbId", item.tmdbId);
-  if (item.tvdbId) params.set("tvdbId", item.tvdbId);
-  if (item.imdbId) params.set("imdbId", item.imdbId);
-  if (typeof item.season === "number") params.set("season", String(item.season));
-  if (typeof item.episode === "number") params.set("episode", String(item.episode));
-  if (item.posterUrl) params.set("posterUrl", item.posterUrl);
-  if (item.backdropUrl) params.set("backdropUrl", item.backdropUrl);
-  if (item.overview) params.set("overview", item.overview);
-  return `/details?${params.toString()}`;
-}
-
 function MediaRow({
   title,
   items,
@@ -246,71 +219,6 @@ function MediaRow({
   );
 }
 
-function DraggableScroller({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const drag = useRef({ pointerId: -1, startX: 0, startScrollLeft: 0, moved: false });
-
-  return (
-    <div
-      ref={ref}
-      className="media-scrollbar flex gap-4 overflow-x-auto pb-3 [scrollbar-gutter:stable] select-none"
-      onPointerDown={(event) => {
-        const node = ref.current;
-        if (!node || event.button !== 0) return;
-        if (event.target instanceof HTMLElement) {
-          event.target.closest("a,img,button")?.setAttribute("draggable", "false");
-        }
-        drag.current = {
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startScrollLeft: node.scrollLeft,
-          moved: false
-        };
-        node.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        const node = ref.current;
-        if (!node || drag.current.pointerId !== event.pointerId) return;
-        const delta = event.clientX - drag.current.startX;
-        if (Math.abs(delta) > 6) drag.current.moved = true;
-        if (drag.current.moved) event.preventDefault();
-        node.scrollLeft = drag.current.startScrollLeft - delta;
-      }}
-      onPointerUp={(event) => {
-        const node = ref.current;
-        if (!node || drag.current.pointerId !== event.pointerId) return;
-        node.releasePointerCapture(event.pointerId);
-        drag.current.pointerId = -1;
-        window.setTimeout(() => {
-          drag.current.moved = false;
-        }, 0);
-      }}
-      onPointerCancel={(event) => {
-        const node = ref.current;
-        if (!node || drag.current.pointerId !== event.pointerId) return;
-        node.releasePointerCapture(event.pointerId);
-        drag.current.pointerId = -1;
-        drag.current.moved = false;
-      }}
-      onPointerLeave={() => {
-        if (drag.current.pointerId === -1) return;
-        drag.current.pointerId = -1;
-        drag.current.moved = false;
-      }}
-      onClickCapture={(event) => {
-        if (!drag.current.moved) return;
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      onDragStart={(event) => {
-        event.preventDefault();
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 function recentTitle(item: MediaLibraryItem | DiscoverMediaItem) {
   return item.title;
 }
@@ -331,8 +239,8 @@ function episodeCode(season: number, episode: number) {
 
 function compareRecentlyAdded(a: MediaLibraryItem, b: MediaLibraryItem) {
   return (
-    Date.parse(b.updatedAt) - Date.parse(a.updatedAt) ||
     Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+    Date.parse(b.updatedAt) - Date.parse(a.updatedAt) ||
     a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true })
   );
 }
