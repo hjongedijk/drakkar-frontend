@@ -1,5 +1,7 @@
-import { Navigate, createBrowserRouter } from "react-router-dom";
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Navigate, createBrowserRouter } from "react-router-dom";
+import { api } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { AppLayout } from "../components/AppLayout";
 import { Dashboard } from "../pages/Dashboard";
@@ -34,27 +36,53 @@ function RedirectIfAuthenticated({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireSetup({ children }: { children: ReactNode }) {
+  const status = useQuery({ queryKey: ["setup-status"], queryFn: api.setupStatus, retry: false });
+  if (status.isLoading) return <LoadingState />;
+  if (status.data && !status.data.completed) return <Navigate to="/setup" replace />;
+  return <>{children}</>;
+}
+
+function RedirectIfSetupComplete({ children }: { children: ReactNode }) {
+  const status = useQuery({ queryKey: ["setup-status"], queryFn: api.setupStatus, retry: false });
+  if (status.isLoading) return <LoadingState />;
+  if (status.data?.completed) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
 export const router = createBrowserRouter([
+  {
+    path: "/setup",
+    element: (
+      <RedirectIfSetupComplete>
+        <SetupWizard />
+      </RedirectIfSetupComplete>
+    )
+  },
   {
     path: "/login",
     element: (
-      <RedirectIfAuthenticated>
-        <LoginPage />
-      </RedirectIfAuthenticated>
+      <RequireSetup>
+        <RedirectIfAuthenticated>
+          <LoginPage />
+        </RedirectIfAuthenticated>
+      </RequireSetup>
     )
   },
   {
     path: "/",
     element: (
-      <RequireAuth>
-        <AppLayout />
-      </RequireAuth>
+      <RequireSetup>
+        <RequireAuth>
+          <AppLayout />
+        </RequireAuth>
+      </RequireSetup>
     ),
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: "dashboard", element: <Dashboard /> },
-      { path: "discover/:mediaType", element: <DiscoverPage /> },
       { path: "discover/search", element: <DiscoverSearchPage /> },
+      { path: "discover/:mediaType", element: <DiscoverPage /> },
       { path: "details/:mediaType/:idSlug", element: <DetailsPage /> },
       { path: "details", element: <DetailsPage /> },
       { path: "requests", element: <Navigate to="/library" replace /> },
@@ -67,7 +95,6 @@ export const router = createBrowserRouter([
       { path: "profiles", element: <Profiles /> },
       { path: "tasks", element: <TasksPage /> },
       { path: "settings", element: <Settings /> },
-      { path: "setup", element: <SetupWizard /> },
       { path: "logs", element: <Logs /> }
     ]
   }

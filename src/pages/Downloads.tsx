@@ -235,8 +235,10 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
 }
 
 function DownloadRow({ download, onPause, onResume, onCancel, onRetry, onMakeAvailable, onDelete }: { download: DownloadType; onPause: (id: string) => void; onResume: (id: string) => void; onCancel: (id: string) => void; onRetry: (id: string) => void; onMakeAvailable: (id: string) => void; onDelete: (id: string) => void }) {
-  const pct = Math.max(0, Math.min(100, download.progress || (download.size ? (download.downloaded / download.size) * 100 : 0)));
-  const active = ["downloading", "verifying", "fetching_nzb"].includes(download.status);
+  const rawPct = Math.max(0, Math.min(100, download.progress || (download.size ? (download.downloaded / download.size) * 100 : 0)));
+  const pct = download.status === "prepared" ? Math.min(99, rawPct) : rawPct;
+  const active = ["downloading", "verifying", "fetching_nzb", "prepared"].includes(download.status);
+  const progressLabel = download.status === "prepared" ? "finalizing" : `${pct.toFixed(pct < 10 ? 1 : 0)}%`;
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -261,7 +263,7 @@ function DownloadRow({ download, onPause, onResume, onCancel, onRetry, onMakeAva
       </div>
       <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:justify-between sm:gap-2">
         <span>{download.statusLabel ?? statusText(download.status)}</span>
-        <span className="break-words">{pct.toFixed(pct < 10 ? 1 : 0)}% · {formatBytes(download.downloaded)} / {formatBytes(download.size)} · {formatBytes(download.speedBytesSec)}/s · {download.etaSeconds ?? "-"}s ETA</span>
+        <span className="break-words">{progressLabel} · {formatBytes(download.downloaded)} / {formatBytes(download.size)} · {formatBytes(download.speedBytesSec)}/s · {download.etaSeconds ?? "-"}s ETA</span>
       </div>
       {download.error ? <p className="mt-2 text-xs text-destructive">{download.error}</p> : null}
     </div>

@@ -4,11 +4,12 @@ import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, type DiscoverMediaItem, type MediaLibraryItem, type MediaRequest } from "../api/client";
 import { DraggableScroller } from "../components/DraggableScroller";
+import { PosterCardLink } from "../components/PosterCardLink";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { useToast } from "../components/ToastProvider";
-import { detailsHref, idFromSlug } from "../lib/detailsHref";
+import { idFromSlug } from "../lib/detailsHref";
 
 type DetailsGroup = {
   title: string;
@@ -189,7 +190,7 @@ function PeopleRow({ title, people }: { title: string; people: NonNullable<Await
   return (
     <section>
       <h2 className="mb-3 text-lg font-semibold">{title}</h2>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <DraggableScroller className="gap-3">
         {people.map((person) => (
           <div key={`${person.id ?? person.name}:${person.character ?? ""}`} className="w-28 shrink-0 overflow-hidden rounded-xl border bg-card">
             <div className="aspect-[2/3] bg-muted">{person.profileUrl ? <img src={person.profileUrl} alt="" className="h-full w-full object-cover" /> : null}</div>
@@ -199,7 +200,7 @@ function PeopleRow({ title, people }: { title: string; people: NonNullable<Await
             </div>
           </div>
         ))}
-      </div>
+      </DraggableScroller>
     </section>
   );
 }
@@ -211,13 +212,7 @@ function PosterRow({ title, items }: { title: string; items: DiscoverMediaItem[]
       <h2 className="mb-3 text-lg font-semibold">{title}</h2>
       <DraggableScroller>
         {items.map((item) => (
-          <Link key={`${item.mediaType}:${item.tmdbId ?? item.title}`} to={detailsHref(item)} className="group w-36 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-card" draggable={false}>
-            <div className="aspect-[2/3] bg-muted">{item.posterUrl ? <img src={item.posterUrl} alt="" draggable={false} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : null}</div>
-            <div className="p-2">
-              <p className="truncate text-xs font-bold">{item.title}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{item.mediaType} · {item.year ?? "unknown"}</p>
-            </div>
-          </Link>
+          <PosterCardLink key={`${item.mediaType}:${item.tmdbId ?? item.title}`} item={item} meta={`${item.mediaType} · ${item.year ?? "unknown"}`} className="w-36 shrink-0" />
         ))}
       </DraggableScroller>
     </section>

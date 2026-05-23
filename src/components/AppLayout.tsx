@@ -1,5 +1,4 @@
 import {
-  Activity,
   Bell,
   CalendarDays,
   ClipboardList,
@@ -17,7 +16,6 @@ import {
   Settings,
   SlidersHorizontal,
   SunMedium,
-  Triangle,
   UserRound,
   X
 } from "lucide-react";
@@ -29,6 +27,7 @@ import { cn } from "../lib/utils";
 import { useTheme } from "../theme/ThemeProvider";
 import { APP_NAME, APP_VERSION } from "../config";
 import { Button } from "./ui/button";
+import { ProjectLogo } from "./ProjectLogo";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -58,7 +57,7 @@ export function AppLayout() {
     <div className="min-h-screen overflow-x-clip bg-background">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-14 border-r border-cyan-300/10 bg-slate-950/75 backdrop-blur-xl md:flex md:flex-col">
         <div className="grid h-16 place-items-center">
-          <Triangle className="h-5 w-5 text-primary" />
+          <ProjectLogo className="h-6 w-6" />
         </div>
         <nav className="flex flex-1 flex-col items-center gap-2 py-4">
           {navItems.map((item) => (
@@ -78,11 +77,21 @@ export function AppLayout() {
           ))}
         </nav>
         <div className="flex flex-col items-center gap-3 py-5">
-          <Bell className="h-4 w-4 text-muted-foreground" />
-          <UserRound className="h-4 w-4 text-muted-foreground" />
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+          <Button variant="ghost" size="icon" aria-label="Open logs" title="Logs / notifications" onClick={() => navigate("/logs")}>
+            <Bell className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Open user settings" title="User settings" onClick={() => navigate("/settings")}>
+            <UserRound className="h-4 w-4" />
+          </Button>
+          <button
+            className="grid h-8 w-8 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground"
+            type="button"
+            aria-label="Open user settings"
+            title="User settings"
+            onClick={() => navigate("/settings")}
+          >
             {(user?.displayName || "U").slice(0, 1).toUpperCase()}
-          </span>
+          </button>
         </div>
       </aside>
 
@@ -110,9 +119,7 @@ export function AppLayout() {
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-muted-foreground">^K</span>
           </div>
-          <div className="absolute right-5 hidden items-center gap-3 text-sm text-muted-foreground lg:flex">
-            <Activity className="h-4 w-4 text-emerald-500" />
-            <span>Signal OK</span>
+          <div className="absolute right-5 hidden items-center gap-2 text-sm text-muted-foreground lg:flex">
             <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={toggleTheme} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
               {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
@@ -144,7 +151,7 @@ export function AppLayout() {
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/10">
-                <Triangle className="h-5 w-5 text-primary" />
+                <ProjectLogo className="h-6 w-6" />
               </span>
               <div>
                 <p className="text-sm font-bold">{APP_NAME}</p>

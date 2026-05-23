@@ -2,8 +2,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
+import { PosterCardLink, posterGridClass } from "../components/PosterCardLink";
 import { Button } from "../components/ui/button";
-import { detailsHref } from "../lib/detailsHref";
 
 export function DiscoverPage() {
   const params = useParams<{ mediaType: string }>();
@@ -33,21 +33,13 @@ export function DiscoverPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+      <div className={posterGridClass}>
         {items.map((item) => (
-          <Link
+          <PosterCardLink
             key={`${item.mediaType}:${item.tmdbId ?? item.tvdbId ?? item.imdbId ?? item.title}`}
-            to={detailsHref(item)}
-            className="group overflow-hidden rounded-2xl border border-white/10 bg-card"
-          >
-            <div className="aspect-[2/3] bg-muted">
-              {item.posterUrl ? <img src={item.posterUrl} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : null}
-            </div>
-            <div className="p-3">
-              <p className="truncate text-sm font-bold">{item.title}</p>
-              <p className="text-xs text-muted-foreground">{item.mediaType} · {item.year ?? "unknown"}</p>
-            </div>
-          </Link>
+            item={item}
+            meta={`${item.mediaType} · ${item.year ?? "unknown"}`}
+          />
         ))}
       </div>
 

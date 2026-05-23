@@ -1,3 +1,5 @@
+import { DRAKKAR_VERSION } from "./version";
+
 declare global {
   interface Window {
     __DRAKKAR_CONFIG__?: {
@@ -8,14 +10,14 @@ declare global {
 }
 
 export const APP_NAME = "Drakkar";
-export const APP_VERSION = "0.1.1";
+export const APP_VERSION = DRAKKAR_VERSION;
 
 export function getApiBaseUrl() {
-  return window.__DRAKKAR_CONFIG__?.API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL ?? "";
+  return window.__DRAKKAR_CONFIG__?.API_BASE_URL ?? "";
 }
 
 export function getFrontendApiToken() {
-  return window.__DRAKKAR_CONFIG__?.FRONTEND_API_TOKEN ?? import.meta.env.VITE_FRONTEND_API_TOKEN ?? "dev-frontend-token";
+  return window.__DRAKKAR_CONFIG__?.FRONTEND_API_TOKEN ?? "";
 }
 
 export function apiUrl(path: string) {

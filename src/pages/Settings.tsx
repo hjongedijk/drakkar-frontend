@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderTree, Library, Pencil, PlugZap, Plus, Save, Settings2, ShieldAlert, Trash2, Wifi, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { api, type RequestProvider, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
@@ -85,6 +86,7 @@ const settingsTabs: Array<{ value: SettingsTab; label: string; short: string; ic
 ];
 
 export function Settings() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const { user, setUser, logout } = useAuth();
@@ -110,7 +112,10 @@ export function Settings() {
   const naming = useQuery({ queryKey: ["naming"], queryFn: api.naming });
   const authTokens = useQuery({ queryKey: ["auth", "tokens"], queryFn: api.authTokens });
   const [draft, setDraft] = useState<SettingsType | null>(null);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("integrations");
+  const initialTab = settingsTabs.some((tab) => tab.value === searchParams.get("tab"))
+    ? searchParams.get("tab") as SettingsTab
+    : "integrations";
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(initialTab);
   const [policyDraft, setPolicyDraft] = useState<Awaited<ReturnType<typeof api.policies>> | null>(null);
   const [showAdvancedQueue, setShowAdvancedQueue] = useState(false);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
@@ -351,7 +356,7 @@ export function Settings() {
     onSuccess: (result) => {
       setPlexPin(result);
       window.open(result.authUrl, "_blank", "noopener,noreferrer");
-      setPlexMessage(`Plex PIN ${result.code} opened in new tab. Approve, then click Poll.`);
+      setPlexMessage(`Plex PIN ${result.code} opened in new tab. Approve it; Drakkar will detect the token automatically.`);
     },
     onError: (error) => setPlexMessage(error instanceof Error ? error.message : "Could not start Plex OAuth")
   });
@@ -378,6 +383,27 @@ export function Settings() {
   useEffect(() => {
     if (ignoredFiles.data) setIgnoredDraft(ignoredFiles.data.join("\n"));
   }, [ignoredFiles.data]);
+  useEffect(() => {
+    if (!plexPin) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const result = await api.plexOauthPoll(plexPin.pinId);
+        if (cancelled || !result.authorized) return;
+        setPlexMessage("Plex token saved.");
+        setPlexPin(null);
+        queryClient.invalidateQueries({ queryKey: ["settings"] });
+      } catch {
+        // Keep polling until Plex approves the PIN or the user leaves this page.
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => void poll(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [plexPin, queryClient]);
   useEffect(() => {
     if (naming.data) setNamingDraft(naming.data);
   }, [naming.data]);
@@ -460,7 +486,10 @@ export function Settings() {
             key={tab.value}
             className="h-auto min-w-0 flex-col gap-1 px-2 py-2 text-[11px] sm:text-sm"
             variant={settingsTab === tab.value ? "default" : "ghost"}
-            onClick={() => setSettingsTab(tab.value)}
+            onClick={() => {
+              setSettingsTab(tab.value);
+              setSearchParams({ tab: tab.value });
+            }}
             title={tab.label}
           >
             <tab.icon className="h-4 w-4" />
@@ -476,6 +505,7 @@ export function Settings() {
           <LabeledInput label="API key" value={draft.nzbhydraApiKey ?? ""} onChange={(value) => setDraft({ ...draft, nzbhydraApiKey: value })} />
           <LabeledInput label="Search cache TTL" type="number" value={String(draft.nzbhydraCacheTtlSeconds)} onChange={(value) => setDraft({ ...draft, nzbhydraCacheTtlSeconds: Number(value) })} />
           <LabeledInput label="RSS/update cache TTL" type="number" value={String(draft.nzbhydraFeedCacheTtlSeconds)} onChange={(value) => setDraft({ ...draft, nzbhydraFeedCacheTtlSeconds: Number(value) })} />
+          <LabeledInput label="RSS/update max results" type="number" value={String(draft.nzbhydraFeedMaxResults ?? 10000)} onChange={(value) => setDraft({ ...draft, nzbhydraFeedMaxResults: Number(value) || 10000 })} />
           <CheckboxLabel label="Backup working NZBs to nzb-backup/" checked={draft.backupNzbFiles} onChange={(checked) => setDraft({ ...draft, backupNzbFiles: checked })} />
         </SettingsCard>
         <SettingsCard title="Default Quality Profiles" tab="integrations" activeTab={settingsTab}>
@@ -737,6 +767,7 @@ export function Settings() {
             <LabeledInput label="Max download connections" type="number" value={String(policyDraft.maxDownloadConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxDownloadConnections: Number(value) })} />
             <LabeledInput label="Max streaming connections" type="number" value={String(policyDraft.maxStreamingConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxStreamingConnections: Number(value) })} />
             <LabeledInput label="Max total connections" type="number" value={String(policyDraft.maxTotalUsenetConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxTotalUsenetConnections: Number(value) })} disabled />
+            <LabeledInput label="Queue seed target" type="number" value={String(draft.monitorQueueSeedTarget ?? 50)} onChange={(value) => setDraft({ ...draft, monitorQueueSeedTarget: Number(value) || 50 })} />
             <LabeledSelect label="Duplicate NZB" value={policyDraft.duplicateNzbBehavior} onChange={(value) => setPolicyDraft({ ...policyDraft, duplicateNzbBehavior: value as typeof policyDraft.duplicateNzbBehavior })}>
               <option value="mark_failed">Mark failed</option>
               <option value="ignore_existing">Ignore existing</option>

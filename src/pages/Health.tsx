@@ -22,19 +22,19 @@ export function HealthPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Health</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Repair history and upcoming health-check schedule for available media.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Health-check outcomes and upcoming check schedule for available media.</p>
       </div>
 
       <Card className="p-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-2xl font-semibold">Overview</h2>
-          <StatusPill value="Last 30 days" />
+          <StatusPill value="Completed checks · last 30 days" />
         </div>
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="Total Checked" value={overview.totalChecked} />
           <StatCard label={`Healthy (${percent(overview.healthy)}%)`} value={overview.healthy} tone="text-emerald-400" progress={percent(overview.healthy)} progressTone="bg-emerald-300" />
-          <StatCard label={`Repaired (${percent(overview.repaired)}%)`} value={overview.repaired} tone="text-cyan-400" progress={percent(overview.repaired)} progressTone="bg-cyan-300" />
-          <StatCard label={`Deleted (${percent(overview.deleted)}%)`} value={overview.deleted} tone="text-red-400" progress={percent(overview.deleted)} progressTone="bg-red-300" />
+          <StatCard label={`Repaired by health check (${percent(overview.repaired)}%)`} value={overview.repaired} tone="text-cyan-400" progress={percent(overview.repaired)} progressTone="bg-cyan-300" />
+          <StatCard label={`Deleted by health check (${percent(overview.deleted)}%)`} value={overview.deleted} tone="text-red-400" progress={percent(overview.deleted)} progressTone="bg-red-300" />
         </div>
       </Card>
 

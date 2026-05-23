@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { useToast } from "../components/ToastProvider";
 import { Button } from "../components/ui/button";
 import { useTheme } from "../theme/ThemeProvider";
+import { ProjectLogo } from "../components/ProjectLogo";
 
 export function LoginPage() {
   const { user, login, loading } = useAuth();
@@ -21,9 +22,14 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,#1e293b_0%,transparent_38%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,1))] px-4 py-8 sm:py-10">
       <div className="w-full max-w-md space-y-6 rounded-3xl border bg-card/90 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="flex items-start gap-3">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-primary/30 bg-primary/10">
+              <ProjectLogo className="h-7 w-7" />
+            </span>
+            <div>
             <h1 className="text-2xl font-bold sm:text-3xl">Sign in</h1>
             <p className="mt-2 text-sm text-muted-foreground">Use the local admin account to access downloads, library, and settings.</p>
+            </div>
           </div>
           <Button variant="outline" size="icon" onClick={toggleTheme} aria-label="Toggle theme" title={theme === "dark" ? "Light mode" : "Dark mode"}>
             {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

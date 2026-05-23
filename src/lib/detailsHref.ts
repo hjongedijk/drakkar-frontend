@@ -20,8 +20,10 @@ export function detailsHref(item: DetailsHrefItem) {
   const params = new URLSearchParams();
   if (!item.tmdbId && item.tvdbId) params.set("tvdbId", item.tvdbId);
   if (!item.tmdbId && !item.tvdbId && item.imdbId) params.set("imdbId", item.imdbId);
-  if (!id || item.title) params.set("title", item.title);
-  if (item.year) params.set("year", String(item.year));
+  if (!id) {
+    params.set("title", item.title);
+    if (item.year) params.set("year", String(item.year));
+  }
   if (typeof item.season === "number") params.set("season", String(item.season));
   if (typeof item.episode === "number") params.set("episode", String(item.episode));
   const query = params.toString();

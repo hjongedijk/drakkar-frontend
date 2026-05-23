@@ -22,7 +22,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setUser(response.user);
       return response.user;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 428)) {
         setUser(null);
         return null;
       }

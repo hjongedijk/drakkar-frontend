@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { api, type DiscoverMediaItem, type MediaLibraryItem } from "../api/client";
 import { DraggableScroller } from "../components/DraggableScroller";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
+import { PosterCardLink } from "../components/PosterCardLink";
 import { detailsHref } from "../lib/detailsHref";
 
 export function Dashboard() {
@@ -198,20 +199,13 @@ function MediaRow({
       ) : (
         <DraggableScroller>
           {items.map((item) => (
-            <Link
+            <PosterCardLink
               key={`${item.mediaType}:${item.tmdbId ?? item.tvdbId ?? item.imdbId ?? item.title}`}
-              to={detailsHref(item)}
-              className="group w-40 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-card"
-              draggable={false}
-            >
-              <div className="aspect-[2/3] bg-muted">
-                {item.posterUrl ? <img src={item.posterUrl} alt="" draggable={false} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : null}
-              </div>
-              <div className="p-3">
-                <p className="truncate text-sm font-bold">{recentTitle(item)}</p>
-                <p className="text-xs text-muted-foreground">{recentMeta(item)}</p>
-              </div>
-            </Link>
+              item={item}
+              title={recentTitle(item)}
+              meta={recentMeta(item)}
+              className="w-40 shrink-0"
+            />
           ))}
         </DraggableScroller>
       )}

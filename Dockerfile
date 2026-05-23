@@ -12,9 +12,10 @@ RUN npm run build
 
 FROM nginx:1.27-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx-main.conf /etc/nginx/nginx.conf
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY nginx-entrypoint.sh /drakkar-nginx-entrypoint.sh
 COPY docker-entrypoint.d/10-runtime-config.sh /docker-entrypoint.d/10-runtime-config.sh
-RUN chmod +x /docker-entrypoint.d/10-runtime-config.sh
-ENV BACKEND_URL=http://backend:3000
-ENV API_BASE_URL=
+RUN chmod +x /docker-entrypoint.d/10-runtime-config.sh /drakkar-nginx-entrypoint.sh
 EXPOSE 80
+ENTRYPOINT ["/drakkar-nginx-entrypoint.sh"]

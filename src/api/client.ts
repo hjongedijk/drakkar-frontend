@@ -579,6 +579,7 @@ export type Settings = {
   nzbhydraTimeoutMs: number;
   nzbhydraCacheTtlSeconds: number;
   nzbhydraFeedCacheTtlSeconds: number;
+  nzbhydraFeedMaxResults: number;
   backupNzbFiles: boolean;
   tmdbApiKey?: string;
   tvdbApiKey?: string;
@@ -586,6 +587,7 @@ export type Settings = {
   metadataCacheTtlHours: number;
   defaultMovieProfile: string;
   defaultTvProfile: string;
+  monitorQueueSeedTarget: number;
   plexServerUrl?: string;
   plexToken?: string;
   plexLibraryPath: string;
@@ -602,12 +604,22 @@ export type PlexLibrary = {
 
 export type SetupStatus = {
   completed: boolean;
+  adminRequired: boolean;
   checks: {
+    admin: boolean;
     nzbhydra: boolean;
     metadata: boolean;
     requestProvider: boolean;
     usenet: boolean;
     plex: boolean;
+  };
+};
+
+export type CompleteSetupInput = {
+  admin?: {
+    username: string;
+    displayName?: string;
+    password: string;
   };
 };
 
@@ -789,7 +801,7 @@ export const api = {
   settings: () => apiRequest<Settings>("/api/settings"),
   updateSettings: (settings: Settings) => apiRequest<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(settings) }),
   setupStatus: () => apiRequest<SetupStatus>("/api/setup/status"),
-  completeSetup: () => apiRequest<{ ok: boolean }>("/api/setup/complete", { method: "POST", body: "{}" }),
+  completeSetup: (input: CompleteSetupInput = {}) => apiRequest<{ ok: boolean }>("/api/setup/complete", { method: "POST", body: JSON.stringify(input) }),
   plexLibraries: () => apiRequest<{ libraries: PlexLibrary[] }>("/api/plex/libraries"),
   plexTest: () => apiRequest<{ ok: boolean; libraries: PlexLibrary[] }>("/api/plex/test", { method: "POST", body: "{}" }),
   plexRefresh: (path: string) => apiRequest<unknown>("/api/plex/refresh", { method: "POST", body: JSON.stringify({ path }) }),
