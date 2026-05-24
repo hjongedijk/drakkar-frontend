@@ -113,6 +113,7 @@ export type AuthUser = {
   username: string;
   displayName: string;
   isAdmin: boolean;
+  mustChangePassword: boolean;
 };
 
 export type AuthApiKey = {

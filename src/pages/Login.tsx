@@ -42,9 +42,9 @@ export function LoginPage() {
             event.preventDefault();
             setSubmitting(true);
             try {
-              await login(username, password);
-              notify("Logged in.", "success");
-              navigate("/dashboard", { replace: true });
+              const user = await login(username, password);
+              notify(user.mustChangePassword ? "Logged in. Change the default password now." : "Logged in.", user.mustChangePassword ? "info" : "success");
+              navigate(user.mustChangePassword ? "/settings?tab=system" : "/dashboard", { replace: true });
             } catch (error) {
               notify(error instanceof Error ? error.message : "Login failed.", "error");
             } finally {
@@ -53,7 +53,7 @@ export function LoginPage() {
           }}
         >
           <label className="block space-y-2 text-sm">
-            <span className="text-muted-foreground">Username</span>
+            <span className="text-muted-foreground">Username / email</span>
             <div className="flex h-12 items-center gap-3 rounded-2xl border border-white/10 bg-background/60 px-4">
               <UserRound className="h-4 w-4 text-muted-foreground" />
               <input className="w-full bg-transparent outline-none" value={username} onChange={(event) => setUsername(event.target.value)} />
@@ -72,7 +72,7 @@ export function LoginPage() {
         </form>
 
         <div className="rounded-2xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
-          Initial local admin account: <span className="font-semibold">admin</span>. Enter the password manually and change it after first login.
+          Initial local admin account: <span className="font-semibold">admin</span>. Default bootstrap password is <span className="font-semibold">password1234</span> and should be changed after first login.
         </div>
       </div>
     </div>

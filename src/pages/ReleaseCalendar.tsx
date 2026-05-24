@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, type ReleaseCalendarEntry } from "../api/client";
@@ -16,18 +16,46 @@ const typeStyles: Record<ReleaseCalendarEntry["type"], string> = {
 
 export function ReleaseCalendarPage() {
   const [month, setMonth] = useState(currentMonthKey());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [filters, setFilters] = useState<Record<ReleaseCalendarEntry["type"], boolean>>({
     movie: true,
     show: true,
     episode: true
   });
   const [selected, setSelected] = useState<ReleaseCalendarEntry | null>(null);
+  const queryClient = useQueryClient();
+  const monthPickerRef = useRef<HTMLDivElement | null>(null);
 
   const calendar = useQuery({
     queryKey: ["release-calendar", month],
     queryFn: () => api.releaseCalendar(month),
-    staleTime: 10 * 60 * 1000
+    staleTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData
   });
+
+  useEffect(() => {
+    void queryClient.prefetchQuery({
+      queryKey: ["release-calendar", shiftMonth(month, -1)],
+      queryFn: () => api.releaseCalendar(shiftMonth(month, -1)),
+      staleTime: 10 * 60 * 1000
+    });
+    void queryClient.prefetchQuery({
+      queryKey: ["release-calendar", shiftMonth(month, 1)],
+      queryFn: () => api.releaseCalendar(shiftMonth(month, 1)),
+      staleTime: 10 * 60 * 1000
+    });
+  }, [month, queryClient]);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (!monthPickerRef.current) return;
+      if (monthPickerRef.current.contains(event.target as Node)) return;
+      setMonthPickerOpen(false);
+    }
+    if (!monthPickerOpen) return;
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [monthPickerOpen]);
 
   const visibleEntries = useMemo(
     () => (calendar.data?.entries ?? []).filter((entry) => filters[entry.type]),
@@ -35,7 +63,7 @@ export function ReleaseCalendarPage() {
   );
   const gridDays = useMemo(() => buildMonthGrid(month, visibleEntries), [month, visibleEntries]);
 
-  if (calendar.isLoading) return <LoadingState />;
+  if (calendar.isLoading && !calendar.data) return <LoadingState />;
   if (calendar.isError) return <ErrorState message="Could not load release calendar." />;
 
   return (
@@ -49,14 +77,38 @@ export function ReleaseCalendarPage() {
           <Button variant="outline" size="icon" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Previous month">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="min-w-36 rounded-xl border bg-card px-4 py-2 text-center text-sm font-semibold">
-            {monthLabel(month)}
+          <div className="relative" ref={monthPickerRef}>
+            <button
+              type="button"
+              onClick={() => setMonthPickerOpen((current) => !current)}
+              className="min-w-36 rounded-xl border bg-card px-4 py-2 text-center text-sm font-semibold transition hover:border-primary/40 hover:bg-primary/10"
+            >
+              {monthLabel(month)}
+            </button>
+            {monthPickerOpen ? (
+              <div className="absolute right-0 z-20 mt-2 w-56 rounded-2xl border bg-card p-3 shadow-2xl">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Jump to month</div>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(event) => {
+                    setMonth(event.target.value);
+                    setMonthPickerOpen(false);
+                  }}
+                  className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary/50"
+                />
+              </div>
+            ) : null}
           </div>
           <Button variant="outline" size="icon" onClick={() => setMonth(shiftMonth(month, 1))} aria-label="Next month">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {calendar.isFetching ? (
+        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Refreshing month…</div>
+      ) : null}
 
       <section className="flex flex-wrap gap-2 rounded-2xl border bg-card p-4">
         {(["movie", "show", "episode"] as const).map((type) => (

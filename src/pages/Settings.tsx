@@ -697,6 +697,11 @@ export function Settings() {
           <p className="text-sm text-muted-foreground">Connection state is shown on the dashboard and health endpoint.</p>
         </SettingsCard>
         <SettingsCard title="Account" tab="system" activeTab={settingsTab}>
+          {user?.mustChangePassword ? (
+            <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+              This account is still using the bootstrap password. Change it now before using the rest of Drakkar.
+            </div>
+          ) : null}
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput label="Username" value={profileDraft.username} onChange={(value) => setProfileDraft({ ...profileDraft, username: value })} />
             <LabeledInput label="Display name" value={profileDraft.displayName} onChange={(value) => setProfileDraft({ ...profileDraft, displayName: value })} />

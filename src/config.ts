@@ -24,7 +24,7 @@ export function getFrontendApiToken() {
 }
 
 export function getDocsUrl() {
-  return window.__DRAKKAR_CONFIG__?.DOCS_URL || "https://hjongedijk.github.io/drakkar-wiki/";
+  return window.__DRAKKAR_CONFIG__?.DOCS_URL || "https://wiki.drakkar.botcontrol.nl/";
 }
 
 export function setFrontendApiToken(token: string) {
