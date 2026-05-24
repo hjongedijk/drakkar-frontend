@@ -1,0 +1,51 @@
+---
+title: Upgrading
+description: Recommended Docker Compose upgrade flow for Drakkar.
+---
+
+# Upgrading
+
+Recommended upgrade flow:
+
+```bash
+docker compose pull
+docker compose up -d --force-recreate
+docker compose ps
+```
+
+Why this is preferred:
+
+- new images are pulled first
+- services are recreated cleanly
+- volumes and library state stay in place
+
+## When to use full stop/start
+
+Use this only when needed:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+Useful when:
+
+- bind mounts changed
+- you are troubleshooting stale networking
+- you want a full container restart path
+
+## After upgrading
+
+Check:
+
+```bash
+docker compose logs --tail 200 backend
+docker compose ps
+```
+
+Verify:
+
+- backend healthy
+- frontend healthy
+- FUSE mounted
+- no repeated startup migration or mount errors

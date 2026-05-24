@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+:root {
+  --color-fd-primary: 57 230 207;
+  --color-fd-accent: 14 27 31;
+}
+
+html,
+body {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(57, 230, 207, 0.08), transparent 28%),
+    linear-gradient(180deg, #061114 0%, #08161b 48%, #071015 100%);
+}
+
+body {
+  color: #e9fcff;
+}

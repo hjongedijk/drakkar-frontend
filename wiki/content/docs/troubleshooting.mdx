@@ -1,0 +1,42 @@
+---
+title: Troubleshooting
+description: Common startup, FUSE, queue, and storage issues.
+---
+
+# Troubleshooting
+
+## FUSE not mounted after restart
+
+Check:
+
+```bash
+docker compose logs --tail 200 backend
+findmnt -T /mnt/drakkar -o TARGET,PROPAGATION
+```
+
+Expected mount propagation: `shared` or `rshared`.
+
+## Unexpected folders under ./data
+
+Current public defaults only keep:
+
+- `./data/config/settings.json`
+- `./data/nzb-backup`
+
+Working folders should be under `/mnt`, not `./data`.
+
+## Slow request processing
+
+Check:
+
+- `/api/tasks`
+- `/api/status`
+- `/api/downloads/queue/page?page=1&limit=100`
+
+If `request-sync` is stuck in `running`, redeploy with the latest backend image.
+
+## Placeholder request titles
+
+If you see entries like `Request 4935`, request metadata sync failed for that item.
+
+Newer builds fall back to Drakkar metadata lookups to replace placeholders.

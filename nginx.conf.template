@@ -29,7 +29,11 @@ server {
   }
 
   location = /docs {
-    return 404;
+    try_files /docs/index.html =404;
+  }
+
+  location /docs/ {
+    try_files $uri $uri/ /docs/index.html;
   }
 
   location / {

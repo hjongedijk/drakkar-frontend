@@ -1,5 +1,6 @@
 import {
   Bell,
+  BookOpen,
   CalendarDays,
   ClipboardList,
   Download,
@@ -77,6 +78,11 @@ export function AppLayout() {
           ))}
         </nav>
         <div className="flex flex-col items-center gap-3 py-5">
+          <Button asChild variant="ghost" size="icon" aria-label="Open docs" title="Docs">
+            <a href="/docs">
+              <BookOpen className="h-4 w-4" />
+            </a>
+          </Button>
           <Button variant="ghost" size="icon" aria-label="Open logs" title="Logs / notifications" onClick={() => navigate("/logs")}>
             <Bell className="h-4 w-4" />
           </Button>
@@ -184,6 +190,13 @@ export function AppLayout() {
                 {item.label}
               </NavLink>
             ))}
+            <a
+              href="/docs"
+              className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+            >
+              <BookOpen className="h-4 w-4" />
+              Docs
+            </a>
           </nav>
           <div className="mt-4 flex gap-2">
             <Button className="flex-1" variant="outline" onClick={toggleTheme} aria-label="Toggle theme" title="Toggle theme">

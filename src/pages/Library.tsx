@@ -39,11 +39,11 @@ function cleanSeriesTitle(value: string) {
 }
 
 const monitorLegend = [
-  { label: "Continuing (All episodes downloaded)", classes: "bg-[#5f98ff]" },
-  { label: "Ended (All episodes downloaded)", classes: "bg-[#22c55e]" },
-  { label: "Missing Episodes (Series monitored)", classes: "bg-[#ff5b5b]" },
-  { label: "Missing Episodes (Series not monitored)", classes: "bg-[#ffab24]" },
-  { label: "Downloading (One or more episodes)", classes: "bg-[#8b5cf6]" }
+  { label: "Completed (Monitored)", classes: "bg-[#22c55e]" },
+  { label: "Completed (Unmonitored)", classes: "bg-[#5f98ff]" },
+  { label: "Downloading / Grabbed", classes: "bg-[#8b5cf6]" },
+  { label: "Missing (Monitored)", classes: "bg-[#ff5b5b]" },
+  { label: "Missing (Unmonitored)", classes: "bg-[#ffab24]" }
 ];
 
 const activeDownloadStatuses = new Set(["queued", "fetching_nzb", "verifying", "prepared", "waiting_for_provider", "waiting_for_nzb", "downloading", "paused"]);
@@ -59,6 +59,16 @@ function movieRequestPhase(request?: MediaRequest) {
   if (inProgressMovieRequestStatuses.has(request.status)) return "processing";
   return "missing";
 }
+
+function titleLooksPlaceholder(value: string) {
+  return /^Request \d+$/i.test(value.trim());
+}
+
+type GroupStatus = {
+  label: string;
+  color: string;
+  order: number;
+};
 
 export function Library() {
   const queryClient = useQueryClient();
@@ -344,6 +354,9 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     group.posterUrl ??= item.posterUrl;
     group.backdropUrl ??= item.backdropUrl;
     group.overview ??= item.overview;
+    if (titleLooksPlaceholder(group.title) && !titleLooksPlaceholder(item.title)) {
+      group.title = item.mediaType === "tv" ? cleanSeriesTitle(item.title) : item.title;
+    }
     group.recentAt = maxIso(group.recentAt, item.createdAt, item.updatedAt);
     group.items.push(item);
     if (isImportedItem && item.libraryStatus === "available") {
@@ -367,6 +380,8 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
   }
 
   return [...groups.values()].sort((a, b) => {
+    const statusOrder = groupStatus(a).order - groupStatus(b).order;
+    if (statusOrder !== 0) return statusOrder;
     const recent = Date.parse(b.recentAt) - Date.parse(a.recentAt);
     if (recent !== 0) return recent;
     return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
@@ -406,8 +421,8 @@ function countRequestedEpisodes(request?: MediaRequest) {
   if (Array.isArray(request.episodes) && request.episodes.length > 0) return request.episodes.length;
   if (Array.isArray(request.seasons) && request.seasons.length > 0) {
     return request.seasons.reduce((sum, season) => {
-      if (typeof season === "number") return sum + season;
-      if (typeof season === "string" && /^\d+$/.test(season)) return sum + Number(season);
+      if (typeof season === "number") return sum + 1;
+      if (typeof season === "string" && /^\d+$/.test(season)) return sum + 1;
       if (season && typeof season === "object") {
         const row = season as Record<string, unknown>;
         if (typeof row.episodeCount === "number") return sum + row.episodeCount;
@@ -570,25 +585,25 @@ function LibraryDetails({
   );
 }
 
-function groupStatus(group: LibraryGroup) {
+function groupStatus(group: LibraryGroup): GroupStatus {
   if (group.mediaType === "movie") {
     const phase = movieRequestPhase(group.request);
-    if (group.downloadingCount > 0) return { label: "Queued", color: "bg-[#8b5cf6]" };
+    if (group.downloadingCount > 0) return { label: "Downloading", color: "bg-[#8b5cf6]", order: 2 };
     if (group.availableCount > 0) return group.request
-      ? { label: "Downloaded (Monitored)", color: "bg-[#22c55e]" }
-      : { label: "Downloaded (Unmonitored)", color: "bg-[#7c8596]" };
-    if (phase === "processing") return { label: "Grabbed (Monitored)", color: "bg-[#5f98ff]" };
+      ? { label: "Completed (Monitored)", color: "bg-[#22c55e]", order: 0 }
+      : { label: "Completed (Unmonitored)", color: "bg-[#5f98ff]", order: 1 };
+    if (phase === "processing") return { label: "Grabbed", color: "bg-[#8b5cf6]", order: 2 };
     return group.request
-      ? { label: "Missing (Monitored)", color: "bg-[#ff5b5b]" }
-      : { label: "Missing (Unmonitored)", color: "bg-[#ffab24]" };
+      ? { label: "Missing (Monitored)", color: "bg-[#ff5b5b]", order: 3 }
+      : { label: "Missing (Unmonitored)", color: "bg-[#ffab24]", order: 4 };
   }
 
-  if (group.downloadingCount > 0) return { label: "Downloading", color: "bg-[#8b5cf6]" };
-  if (group.missingCount > 0 && group.request) return { label: "Missing Episodes", color: "bg-[#ff5b5b]" };
-  if (group.missingCount > 0) return { label: "Missing Episodes", color: "bg-[#ffab24]" };
-  if (group.availableCount > 0 && group.request) return { label: "Continuing", color: "bg-[#5f98ff]" };
-  if (group.availableCount > 0) return { label: "Ended", color: "bg-[#22c55e]" };
-  return { label: "Queued", color: "bg-[#8b5cf6]" };
+  if (group.downloadingCount > 0) return { label: "Downloading", color: "bg-[#8b5cf6]", order: 2 };
+  if (group.missingCount > 0 && group.request) return { label: "Missing (Monitored)", color: "bg-[#ff5b5b]", order: 3 };
+  if (group.missingCount > 0) return { label: "Missing (Unmonitored)", color: "bg-[#ffab24]", order: 4 };
+  if (group.availableCount > 0 && group.request) return { label: "Completed (Monitored)", color: "bg-[#22c55e]", order: 0 };
+  if (group.availableCount > 0) return { label: "Completed (Unmonitored)", color: "bg-[#5f98ff]", order: 1 };
+  return { label: "Downloading", color: "bg-[#8b5cf6]", order: 2 };
 }
 
 function movieSummary(group: LibraryGroup) {

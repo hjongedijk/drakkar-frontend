@@ -1,0 +1,64 @@
+---
+title: Installation
+description: Public Docker Compose deployment, host mount requirements, and first boot.
+---
+
+# Installation
+
+## Public Compose
+
+Use the published compose stack from the backend release repo.
+
+It includes:
+
+- frontend
+- backend
+- postgres
+- valkey
+- seerr
+
+## Host mount setup
+
+Drakkar expects a shared host mount at `/mnt/drakkar`.
+
+Recommended systemd unit:
+
+```ini
+[Unit]
+Description=Prepare Drakkar shared bind mount and Valkey host tuning
+After=local-fs.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/mkdir -p /mnt/drakkar
+ExecStartPre=/usr/bin/mkdir -p /mnt/drakkar/media/movies
+ExecStartPre=/usr/bin/mkdir -p /mnt/drakkar/media/tv
+ExecStartPre=/usr/bin/mkdir -p /mnt/drakkar/fuse
+ExecStartPre=/usr/bin/sh -c 'printf "%s\n" "vm.overcommit_memory = 1" > /etc/sysctl.d/99-valkey.conf'
+ExecStartPre=/usr/sbin/sysctl -p /etc/sysctl.d/99-valkey.conf
+ExecStart=/usr/bin/mount --bind /mnt/drakkar /mnt/drakkar
+ExecStart=/usr/bin/mount --make-rshared /mnt/drakkar
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now drakkar-mount.service
+```
+
+## First boot
+
+Open the frontend and complete the setup wizard:
+
+- create the first admin
+- connect NZBHydra2
+- connect a Usenet provider
+- connect Seerr
+- connect metadata providers
+- optionally connect Plex

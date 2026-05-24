@@ -1,0 +1,44 @@
+---
+title: API
+description: REST entry points, GraphQL, and authentication examples.
+---
+
+# API
+
+## REST
+
+Main endpoints:
+
+- `/api/status`
+- `/api/library`
+- `/api/requests`
+- `/api/downloads/queue/page`
+- `/api/tasks`
+
+## GraphQL
+
+Use GraphiQL at:
+
+```txt
+/api/graphql
+```
+
+Example query:
+
+```graphql
+{
+  status { version backend postgresql valkey }
+  downloads(limit: 5) { title status progress }
+  library(limit: 5) { title mediaType libraryStatus updatedAt }
+}
+```
+
+## Authentication
+
+Use the same token as both headers:
+
+```bash
+curl -H 'x-api-token: YOUR_DRAKKAR_API_TOKEN' \
+  -H 'Authorization: Bearer YOUR_DRAKKAR_API_TOKEN' \
+  http://HOST:8080/api/requests
+```

@@ -1,0 +1,53 @@
+---
+title: Configuration
+description: Runtime paths, settings.json, and where Drakkar stores real working data.
+---
+
+# Configuration
+
+Drakkar stores runtime config in:
+
+```txt
+/data/config/settings.json
+```
+
+## Runtime layout
+
+Persistent local data:
+
+- `/data/config/settings.json`
+- `/data/nzb-backup`
+
+Live working paths:
+
+- `/mnt/downloads`
+- `/mnt/completed`
+- `/mnt/nzb`
+- `/mnt/media/movies`
+- `/mnt/media/tv`
+
+FUSE views:
+
+- `/mnt/fuse/nzb`
+- `/mnt/fuse/completed`
+- `/mnt/fuse/mounted/releases`
+
+NZB backups are not exposed through the FUSE tree.
+
+## Shared API token
+
+The Settings page exposes one shared **Drakkar API Token**.
+
+Use it for:
+
+- frontend to backend requests
+- remote REST API calls
+- GraphQL requests
+
+Remote API example:
+
+```bash
+curl -H 'x-api-token: YOUR_DRAKKAR_API_TOKEN' \
+  -H 'Authorization: Bearer YOUR_DRAKKAR_API_TOKEN' \
+  http://HOST:8080/api/status
+```

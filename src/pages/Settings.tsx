@@ -111,7 +111,6 @@ export function Settings() {
   });
   const blocklistStats = useQuery({ queryKey: ["blocklist", "stats"], queryFn: api.blocklistStats });
   const naming = useQuery({ queryKey: ["naming"], queryFn: api.naming });
-  const authTokens = useQuery({ queryKey: ["auth", "tokens"], queryFn: api.authTokens });
   const frontendToken = useQuery({ queryKey: ["settings", "frontend-token"], queryFn: api.frontendToken, enabled: user?.isAdmin === true });
   const [draft, setDraft] = useState<SettingsType | null>(null);
   const initialTab = settingsTabs.some((tab) => tab.value === searchParams.get("tab"))
@@ -141,8 +140,6 @@ export function Settings() {
   const [usenetServer, setUsenetServer] = useState<UsenetServerInput>(defaultUsenetServer);
   const [profileDraft, setProfileDraft] = useState({ username: user?.username ?? "admin", displayName: user?.displayName ?? "admin" });
   const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "" });
-  const [tokenName, setTokenName] = useState("");
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [rotatedFrontendToken, setRotatedFrontendToken] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [plexMessage, setPlexMessage] = useState<string | null>(null);
@@ -322,24 +319,6 @@ export function Settings() {
       notify("Password updated");
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not update password")
-  });
-  const createToken = useMutation({
-    mutationFn: () => api.createAuthToken({ name: tokenName }),
-    onSuccess: (result) => {
-      setCreatedToken(result.token);
-      setTokenName("");
-      queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
-      notify("API token created");
-    },
-    onError: (error) => notify(error instanceof Error ? error.message : "Could not create API token")
-  });
-  const deleteToken = useMutation({
-    mutationFn: (id: string) => api.deleteAuthToken(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
-      notify("API token revoked");
-    },
-    onError: (error) => notify(error instanceof Error ? error.message : "Could not revoke API token")
   });
   const rotateFrontendToken = useMutation({
     mutationFn: () => api.rotateFrontendToken(),
@@ -734,11 +713,11 @@ export function Settings() {
             <Button variant="outline" onClick={() => void logout()}>Logout</Button>
           </div>
         </SettingsCard>
-        <SettingsCard title="Frontend API Token" tab="system" activeTab={settingsTab}>
+        <SettingsCard title="Drakkar API Token" tab="system" activeTab={settingsTab}>
           {user?.isAdmin ? (
             <div className="space-y-3">
               <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
-                This token is the shared frontend-to-backend gateway token from <code>settings.json</code>. It is not the same as a user/admin API key.
+                This is the one shared Drakkar API token from <code>settings.json</code>. Frontend requests and external API access can use this same token.
               </div>
               <div className="grid gap-2 md:grid-cols-[1fr_auto]">
                 <Input
@@ -751,36 +730,12 @@ export function Settings() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Regenerating updates <code>/data/config/settings.json</code> and this browser session immediately.
+                Regenerating updates <code>/data/config/settings.json</code> and this browser session immediately. For remote API access, send it as both <code>x-api-token</code> and <code>Authorization: Bearer ...</code>.
               </p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Admin access required to view or rotate the shared frontend API token.</p>
           )}
-        </SettingsCard>
-        <SettingsCard title="User API Tokens" tab="system" activeTab={settingsTab}>
-          <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-            <Input value={tokenName} onChange={(event) => setTokenName(event.target.value)} placeholder="Admin script token" />
-            <Button onClick={() => createToken.mutate()} disabled={!tokenName.trim() || createToken.isPending}>
-              <Plus className="mr-2 h-4 w-4" />Create token
-            </Button>
-          </div>
-          {createdToken ? (
-            <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-              Copy now, this token is shown once: <span className="break-all font-semibold">{createdToken}</span>
-            </div>
-          ) : null}
-          <div className="max-h-72 space-y-2 overflow-auto">
-            {(authTokens.data?.tokens ?? []).map((token) => (
-              <div key={token.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{token.name}</p>
-                  <p className="text-xs text-muted-foreground">Created {new Date(token.createdAt).toLocaleString()} · Last used {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleString() : "never"}</p>
-                </div>
-                <Button variant="ghost" size="icon" title="Revoke API token" onClick={() => deleteToken.mutate(token.id)}><Trash2 className="h-4 w-4" /></Button>
-              </div>
-            ))}
-          </div>
         </SettingsCard>
         <SettingsCard title="Queue Management" tab="queue" activeTab={settingsTab}>
           <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
