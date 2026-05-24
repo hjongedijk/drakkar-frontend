@@ -1,4 +1,4 @@
-import { apiUrl, getFrontendApiToken } from "../config";
+import { apiUrl, getDrakkarApiToken } from "../config";
 
 const API_REQUEST_TIMEOUT_MS = 30000;
 
@@ -16,7 +16,7 @@ export class ApiError extends Error {
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body != null && !headers.has("content-type")) headers.set("content-type", "application/json");
-  headers.set("x-api-token", getFrontendApiToken());
+  headers.set("x-api-token", getDrakkarApiToken());
   const response = await fetchWithTimeout(apiUrl(path), {
     ...init,
     credentials: "include",
@@ -42,7 +42,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 export async function downloadBlob(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (init.body != null && !headers.has("content-type")) headers.set("content-type", "application/json");
-  headers.set("x-api-token", getFrontendApiToken());
+  headers.set("x-api-token", getDrakkarApiToken());
   const response = await fetchWithTimeout(apiUrl(path), {
     ...init,
     credentials: "include",
@@ -123,8 +123,8 @@ export type AuthApiKey = {
   lastUsedAt?: string | null;
 };
 
-export type FrontendTokenState = {
-  frontendApiToken: string;
+export type DrakkarApiTokenState = {
+  drakkarApiToken: string;
 };
 
 export type HealthCheckItem = {
@@ -269,12 +269,12 @@ export function createAuthToken(payload: { name: string }) {
   });
 }
 
-export function frontendToken() {
-  return apiRequest<FrontendTokenState>("/api/settings/frontend-token");
+export function drakkarApiToken() {
+  return apiRequest<DrakkarApiTokenState>("/api/settings/drakkar-api-token");
 }
 
-export function rotateFrontendToken() {
-  return apiRequest<FrontendTokenState>("/api/settings/frontend-token/rotate", { method: "POST", body: "{}" });
+export function rotateDrakkarApiToken() {
+  return apiRequest<DrakkarApiTokenState>("/api/settings/drakkar-api-token/rotate", { method: "POST", body: "{}" });
 }
 
 export function deleteAuthToken(id: string) {
@@ -376,14 +376,30 @@ export type MediaRequest = {
 
 export type RequestSyncResult = {
   imported: number;
+  updated?: number;
+  skipped?: number;
+  fetched?: number;
+  budgetExceeded?: boolean;
   failedProviders: number;
   providerResults: {
     providerId: string;
     providerName: string;
+    fetched?: number;
     imported: number;
+    updated?: number;
+    skipped?: number;
     ok: boolean;
     error?: string;
   }[];
+};
+
+export type FullRequestSyncRefreshResult = {
+  sync: RequestSyncResult;
+  recoverFailed: { recovered: number };
+  recoverSelected: { recovered: number };
+  metadataBackfill: { updated: number };
+  monitored: { retried: number; skippedBecauseQueueFull?: number; pendingQueueItems?: number; queueSeedTarget?: number };
+  library: { refreshed: number; items: MediaLibraryItem[] };
 };
 
 export type RequestMonitorSeason = {
@@ -858,8 +874,8 @@ export const api = {
   authTokens,
   createAuthToken,
   deleteAuthToken,
-  frontendToken,
-  rotateFrontendToken,
+  drakkarApiToken,
+  rotateDrakkarApiToken,
   status: getStatus,
   healthChecks: () => apiRequest<HealthChecksResponse>("/api/health/checks"),
   discoverHome: () => apiRequest<DiscoverHomeResponse>("/api/discover/home"),
@@ -926,6 +942,7 @@ export const api = {
     apiRequest<{ request: MediaRequest; seerr: { ok: boolean; status: number; body?: unknown } | null }>("/api/requests", { method: "POST", body: JSON.stringify(item) }),
   requestMonitor: (id: string) => apiRequest<RequestMonitor>(`/api/requests/${id}/monitor`),
   syncRequests: () => apiRequest<RequestSyncResult>("/api/requests/sync", { method: "POST", body: "{}" }),
+  fullSyncRefresh: () => apiRequest<FullRequestSyncRefreshResult>("/api/requests/full-sync-refresh", { method: "POST", body: "{}" }),
   approveRequest: (id: string) => apiRequest<MediaRequest>(`/api/requests/${id}/approve`, { method: "POST" }),
   rejectRequest: (id: string) => apiRequest<MediaRequest>(`/api/requests/${id}/reject`, { method: "POST" }),
   searchRequest: (id: string) => apiRequest<{ releases: RequestReleaseCandidate[] }>(`/api/requests/${id}/search`, { method: "POST" }),

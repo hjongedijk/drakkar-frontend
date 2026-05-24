@@ -17,6 +17,9 @@ export function Requests() {
   const [candidates, setCandidates] = useState<RequestReleaseCandidate[]>([]);
   const requests = useQuery({ queryKey: ["requests"], queryFn: api.requests, refetchInterval: 15000 });
   const sync = useRefreshMutation(() => api.syncRequests(), [["requests"]], { success: "Requests synced." });
+  const fullSyncRefresh = useRefreshMutation(() => api.fullSyncRefresh(), [["requests"], ["library"], ["downloads", "queue"]], {
+    success: "Full request resync and library refresh completed."
+  });
   const approve = useRefreshMutation((id: string) => api.approveRequest(id), [["requests"]], { success: "Request approved." });
   const reject = useRefreshMutation((id: string) => api.rejectRequest(id), [["requests"]], { success: "Request rejected." });
   const search = useMutation({
@@ -61,9 +64,32 @@ export function Requests() {
             <option value="available">Available</option>
             <option value="import_failed">Import failed</option>
           </Select>
-      <Button className="w-full sm:w-auto" onClick={() => { notify("Syncing Seerr requests...", "info"); sync.mutate(undefined); }}>
+          <Button className="w-full sm:w-auto" onClick={() => { notify("Syncing Seerr requests...", "info"); sync.mutate(undefined); }}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Sync
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            variant="outline"
+            onClick={() => {
+              notify("Running full Seerr resync and library rebuild...", "info");
+              fullSyncRefresh.mutate(undefined, {
+                onSuccess: (result) => {
+                  const summary = [
+                    `${result.sync.imported ?? 0} imported`,
+                    `${result.sync.updated ?? 0} updated`,
+                    `${result.recoverFailed.recovered ?? 0} failed recovered`,
+                    `${result.recoverSelected.recovered ?? 0} selected recovered`,
+                    `${result.monitored.retried ?? 0} queued`,
+                    `${result.library.refreshed ?? 0} library refreshed`
+                  ].join(" · ");
+                  notify(summary, "success");
+                }
+              });
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Full Resync
           </Button>
         </div>
       </div>

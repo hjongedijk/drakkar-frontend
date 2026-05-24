@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { api, type FrontendTokenState, type RequestProvider, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
+import { api, type DrakkarApiTokenState, type RequestProvider, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -111,7 +111,7 @@ export function Settings() {
   });
   const blocklistStats = useQuery({ queryKey: ["blocklist", "stats"], queryFn: api.blocklistStats });
   const naming = useQuery({ queryKey: ["naming"], queryFn: api.naming });
-  const frontendToken = useQuery({ queryKey: ["settings", "frontend-token"], queryFn: api.frontendToken, enabled: user?.isAdmin === true });
+  const drakkarApiToken = useQuery({ queryKey: ["settings", "drakkar-api-token"], queryFn: api.drakkarApiToken, enabled: user?.isAdmin === true });
   const [draft, setDraft] = useState<SettingsType | null>(null);
   const initialTab = settingsTabs.some((tab) => tab.value === searchParams.get("tab"))
     ? searchParams.get("tab") as SettingsTab
@@ -140,7 +140,7 @@ export function Settings() {
   const [usenetServer, setUsenetServer] = useState<UsenetServerInput>(defaultUsenetServer);
   const [profileDraft, setProfileDraft] = useState({ username: user?.username ?? "admin", displayName: user?.displayName ?? "admin" });
   const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "" });
-  const [rotatedFrontendToken, setRotatedFrontendToken] = useState<string | null>(null);
+  const [rotatedDrakkarApiToken, setRotatedDrakkarApiToken] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [plexMessage, setPlexMessage] = useState<string | null>(null);
   const [plexPin, setPlexPin] = useState<{ pinId: number; code: string; authUrl: string } | null>(null);
@@ -320,15 +320,15 @@ export function Settings() {
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not update password")
   });
-  const rotateFrontendToken = useMutation({
-    mutationFn: () => api.rotateFrontendToken(),
-    onSuccess: (result: FrontendTokenState) => {
-      setFrontendApiToken(result.frontendApiToken);
-      setRotatedFrontendToken(result.frontendApiToken);
-      queryClient.setQueryData(["settings", "frontend-token"], result);
-      notify("Frontend API token rotated", "success");
+  const rotateDrakkarApiToken = useMutation({
+    mutationFn: () => api.rotateDrakkarApiToken(),
+    onSuccess: (result: DrakkarApiTokenState) => {
+      setFrontendApiToken(result.drakkarApiToken);
+      setRotatedDrakkarApiToken(result.drakkarApiToken);
+      queryClient.setQueryData(["settings", "drakkar-api-token"], result);
+      notify("Drakkar API token rotated", "success");
     },
-    onError: (error) => notify(error instanceof Error ? error.message : "Could not rotate frontend API token", "error")
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not rotate Drakkar API token", "error")
   });
   const resetEnvironment = useMutation({
     mutationFn: () => api.resetEnvironment(),
@@ -726,20 +726,20 @@ export function Settings() {
               </div>
               <div className="grid gap-2 md:grid-cols-[1fr_auto]">
                 <Input
-                  value={rotatedFrontendToken ?? frontendToken.data?.frontendApiToken ?? ""}
+                  value={rotatedDrakkarApiToken ?? drakkarApiToken.data?.drakkarApiToken ?? ""}
                   readOnly
-                  placeholder="Frontend API token"
+                  placeholder="Drakkar API token"
                 />
-                <Button onClick={() => rotateFrontendToken.mutate()} disabled={rotateFrontendToken.isPending}>
+                <Button onClick={() => rotateDrakkarApiToken.mutate()} disabled={rotateDrakkarApiToken.isPending}>
                   <Save className="mr-2 h-4 w-4" />Regenerate
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Regenerating updates <code>/data/config/settings.json</code> and this browser session immediately. For remote API access, send it as both <code>x-api-token</code> and <code>Authorization: Bearer ...</code>.
+                Regenerating updates <code>/data/config/settings.json</code> and this browser session immediately. Send it as <code>x-api-token</code>. Bearer auth with the same token also works.
               </p>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Admin access required to view or rotate the shared frontend API token.</p>
+            <p className="text-sm text-muted-foreground">Admin access required to view or rotate the shared Drakkar API token.</p>
           )}
         </SettingsCard>
         <SettingsCard title="Queue Management" tab="queue" activeTab={settingsTab}>

@@ -101,6 +101,24 @@ export function Library() {
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Request sync failed.", "error")
   });
+  const fullSyncRefresh = useMutation({
+    mutationFn: api.fullSyncRefresh,
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+      void queryClient.invalidateQueries({ queryKey: ["downloads"] });
+      notify(
+        [
+          `${result.sync.imported ?? 0} imported`,
+          `${result.sync.updated ?? 0} updated`,
+          `${result.monitored.retried ?? 0} queued`,
+          `${result.library.refreshed ?? 0} refreshed`
+        ].join(" · "),
+        "success"
+      );
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Full resync failed.", "error")
+  });
   const grabRequest = useMutation({
     mutationFn: (id: string) => api.grabRequest(id),
     onSuccess: () => {
@@ -201,6 +219,16 @@ export function Library() {
           <Button variant="outline" onClick={() => syncRequests.mutate()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Sync
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              notify("Running full request resync and library rebuild...", "info");
+              fullSyncRefresh.mutate();
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Full Resync
           </Button>
         </div>
       </div>
