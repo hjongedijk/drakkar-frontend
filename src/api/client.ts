@@ -613,6 +613,37 @@ export type SetupStatus = {
     usenet: boolean;
     plex: boolean;
   };
+  prefill: {
+    nzbhydraUrl: string;
+    nzbhydraApiKey: string;
+    tmdbApiKey: string;
+    tvdbApiKey: string;
+    plexServerUrl: string;
+    plexToken: string;
+    plexLibraryPath: string;
+    plexSectionId: string;
+    usenet: {
+      name: string;
+      host: string;
+      port: number;
+      ssl: boolean;
+      username: string;
+      password: string;
+      connections: number;
+      priority: number;
+      enabled: boolean;
+      isBackup: boolean;
+    } | null;
+    requestProvider: {
+      name: string;
+      baseUrl: string;
+      apiKey: string;
+      enabled: boolean;
+      syncIntervalMinutes: number;
+      defaultMovieProfile: string;
+      defaultTvProfile: string;
+    } | null;
+  };
 };
 
 export type CompleteSetupInput = {
@@ -620,6 +651,37 @@ export type CompleteSetupInput = {
     username: string;
     displayName?: string;
     password: string;
+  };
+  settings?: {
+    nzbhydraUrl?: string;
+    nzbhydraApiKey?: string;
+    tmdbApiKey?: string;
+    tvdbApiKey?: string;
+    plexServerUrl?: string;
+    plexToken?: string;
+    plexLibraryPath?: string;
+    plexSectionId?: string;
+  };
+  usenet?: {
+    name: string;
+    host: string;
+    port: number;
+    ssl: boolean;
+    username?: string;
+    password?: string;
+    connections: number;
+    priority: number;
+    enabled: boolean;
+    isBackup: boolean;
+  };
+  requestProvider?: {
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    enabled: boolean;
+    syncIntervalMinutes: number;
+    defaultMovieProfile?: string;
+    defaultTvProfile?: string;
   };
 };
 

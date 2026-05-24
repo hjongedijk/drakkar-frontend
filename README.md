@@ -42,6 +42,14 @@ Published image:
 ghcr.io/hjongedijk/drakkar-frontend:latest
 ```
 
+Public deployment compose is shipped with the backend repo, because the release stack includes:
+
+- frontend
+- backend
+- postgres
+- valkey
+- optional seerr/debug services
+
 ## Authentication
 
 The frontend talks to the backend with:
@@ -49,16 +57,11 @@ The frontend talks to the backend with:
 - session login for users
 - backend API token validation for app-to-app traffic
 
-Initial local admin account:
-
-- username: `admin`
-- password: `password1234`
-
-The login form does not prefill credentials anymore. Enter them manually and change the password after first login.
+There is no fixed default admin account anymore.
+On first boot the setup wizard opens before login and creates the first admin.
 
 ## Notes
 
 - Theme toggle supports dark and light mode
 - API base URL can be overridden at runtime when frontend and backend are hosted separately
 - Mobile layout is responsive, but depends on modern browser support
-
