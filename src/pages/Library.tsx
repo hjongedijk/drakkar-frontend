@@ -299,6 +299,7 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
 
   for (const request of requests) {
     const key = groupKey({
+      requestId: request.id,
       mediaType: request.mediaType,
       title: request.title,
       year: request.year,
@@ -436,7 +437,8 @@ function countRequestedEpisodes(request?: MediaRequest) {
   return 0;
 }
 
-function groupKey(input: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) {
+function groupKey(input: { requestId?: string | null; mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) {
+  if (input.requestId) return `request:${input.requestId}`;
   const title = input.mediaType === "tv" ? cleanSeriesTitle(input.title) : input.title;
   if (input.imdbId) return `${input.mediaType}:imdb:${input.imdbId}`;
   if (input.tmdbId) return `${input.mediaType}:tmdb:${input.tmdbId}`;
