@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { api, type RequestProvider, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
+import { api, type FrontendTokenState, type RequestProvider, type RequestProviderInput, type Settings as SettingsType, type UsenetServer, type UsenetServerInput } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -12,6 +12,7 @@ import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { useToast } from "../components/ToastProvider";
+import { setFrontendApiToken } from "../config";
 
 type SettingsTab = "integrations" | "providers" | "queue" | "library" | "rules" | "system";
 
@@ -111,6 +112,7 @@ export function Settings() {
   const blocklistStats = useQuery({ queryKey: ["blocklist", "stats"], queryFn: api.blocklistStats });
   const naming = useQuery({ queryKey: ["naming"], queryFn: api.naming });
   const authTokens = useQuery({ queryKey: ["auth", "tokens"], queryFn: api.authTokens });
+  const frontendToken = useQuery({ queryKey: ["settings", "frontend-token"], queryFn: api.frontendToken, enabled: user?.isAdmin === true });
   const [draft, setDraft] = useState<SettingsType | null>(null);
   const initialTab = settingsTabs.some((tab) => tab.value === searchParams.get("tab"))
     ? searchParams.get("tab") as SettingsTab
@@ -141,6 +143,7 @@ export function Settings() {
   const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "" });
   const [tokenName, setTokenName] = useState("");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [rotatedFrontendToken, setRotatedFrontendToken] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [plexMessage, setPlexMessage] = useState<string | null>(null);
   const [plexPin, setPlexPin] = useState<{ pinId: number; code: string; authUrl: string } | null>(null);
@@ -337,6 +340,16 @@ export function Settings() {
       notify("API token revoked");
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not revoke API token")
+  });
+  const rotateFrontendToken = useMutation({
+    mutationFn: () => api.rotateFrontendToken(),
+    onSuccess: (result: FrontendTokenState) => {
+      setFrontendApiToken(result.frontendApiToken);
+      setRotatedFrontendToken(result.frontendApiToken);
+      queryClient.setQueryData(["settings", "frontend-token"], result);
+      notify("Frontend API token rotated", "success");
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not rotate frontend API token", "error")
   });
   const resetEnvironment = useMutation({
     mutationFn: () => api.resetEnvironment(),
@@ -721,9 +734,33 @@ export function Settings() {
             <Button variant="outline" onClick={() => void logout()}>Logout</Button>
           </div>
         </SettingsCard>
-        <SettingsCard title="API Tokens" tab="system" activeTab={settingsTab}>
+        <SettingsCard title="Frontend API Token" tab="system" activeTab={settingsTab}>
+          {user?.isAdmin ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
+                This token is the shared frontend-to-backend gateway token from <code>settings.json</code>. It is not the same as a user/admin API key.
+              </div>
+              <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                <Input
+                  value={rotatedFrontendToken ?? frontendToken.data?.frontendApiToken ?? ""}
+                  readOnly
+                  placeholder="Frontend API token"
+                />
+                <Button onClick={() => rotateFrontendToken.mutate()} disabled={rotateFrontendToken.isPending}>
+                  <Save className="mr-2 h-4 w-4" />Regenerate
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Regenerating updates <code>/data/config/settings.json</code> and this browser session immediately.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Admin access required to view or rotate the shared frontend API token.</p>
+          )}
+        </SettingsCard>
+        <SettingsCard title="User API Tokens" tab="system" activeTab={settingsTab}>
           <div className="grid gap-2 md:grid-cols-[1fr_auto]">
-            <Input value={tokenName} onChange={(event) => setTokenName(event.target.value)} placeholder="Frontend QA token" />
+            <Input value={tokenName} onChange={(event) => setTokenName(event.target.value)} placeholder="Admin script token" />
             <Button onClick={() => createToken.mutate()} disabled={!tokenName.trim() || createToken.isPending}>
               <Plus className="mr-2 h-4 w-4" />Create token
             </Button>

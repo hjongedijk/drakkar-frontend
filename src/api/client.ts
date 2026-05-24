@@ -122,6 +122,10 @@ export type AuthApiKey = {
   lastUsedAt?: string | null;
 };
 
+export type FrontendTokenState = {
+  frontendApiToken: string;
+};
+
 export type HealthCheckItem = {
   id: string;
   name: string;
@@ -262,6 +266,14 @@ export function createAuthToken(payload: { name: string }) {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export function frontendToken() {
+  return apiRequest<FrontendTokenState>("/api/settings/frontend-token");
+}
+
+export function rotateFrontendToken() {
+  return apiRequest<FrontendTokenState>("/api/settings/frontend-token/rotate", { method: "POST", body: "{}" });
 }
 
 export function deleteAuthToken(id: string) {
@@ -845,6 +857,8 @@ export const api = {
   authTokens,
   createAuthToken,
   deleteAuthToken,
+  frontendToken,
+  rotateFrontendToken,
   status: getStatus,
   healthChecks: () => apiRequest<HealthChecksResponse>("/api/health/checks"),
   discoverHome: () => apiRequest<DiscoverHomeResponse>("/api/discover/home"),
