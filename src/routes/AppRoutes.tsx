@@ -15,6 +15,7 @@ import { Logs } from "../pages/Logs";
 import { Profiles } from "../pages/Profiles";
 import { ReleaseCalendarPage } from "../pages/ReleaseCalendar";
 import { SearchPage } from "../pages/Search";
+import { ServicesPage } from "../pages/Services";
 import { Settings } from "../pages/Settings";
 import { SetupWizard } from "../pages/SetupWizard";
 import { TasksPage } from "../pages/Tasks";
@@ -46,7 +47,7 @@ function RequireSetup({ children }: { children: ReactNode }) {
 function RedirectIfSetupComplete({ children }: { children: ReactNode }) {
   const status = useQuery({ queryKey: ["setup-status"], queryFn: api.setupStatus, retry: false });
   if (status.isLoading) return <LoadingState />;
-  if (status.data?.completed) return <Navigate to="/login" replace />;
+  if (status.data?.completed) return <Navigate to="/services" replace />;
   return <>{children}</>;
 }
 
@@ -94,6 +95,7 @@ export const router = createBrowserRouter([
       { path: "vfs", element: <VfsBrowser /> },
       { path: "profiles", element: <Profiles /> },
       { path: "tasks", element: <TasksPage /> },
+      { path: "services", element: <ServicesPage /> },
       { path: "settings", element: <Settings /> },
       { path: "logs", element: <Logs /> }
     ]

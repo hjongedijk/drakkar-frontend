@@ -13,7 +13,7 @@ import {
   Menu,
   Moon,
   ScrollText,
-  Sparkles,
+  Server,
   Settings,
   SlidersHorizontal,
   SunMedium,
@@ -26,7 +26,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { useDownloadToasts } from "../hooks/useDownloadToasts";
 import { cn } from "../lib/utils";
 import { useTheme } from "../theme/ThemeProvider";
-import { APP_NAME, APP_VERSION } from "../config";
+import { APP_NAME, APP_VERSION, getDocsUrl } from "../config";
 import { Button } from "./ui/button";
 import { ProjectLogo } from "./ProjectLogo";
 
@@ -41,8 +41,8 @@ const navItems = [
   { to: "/profiles", label: "Quality", icon: SlidersHorizontal },
   { to: "/vfs", label: "Files", icon: FolderTree },
   { to: "/logs", label: "Logs", icon: ScrollText },
+  { to: "/services", label: "Services", icon: Server },
   { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/setup", label: "Setup", icon: Sparkles },
 ];
 
 export function AppLayout() {
@@ -52,6 +52,7 @@ export function AppLayout() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const docsUrl = getDocsUrl();
   const mobilePrimaryItems = navItems.slice(0, 5);
 
   return (
@@ -79,7 +80,7 @@ export function AppLayout() {
         </nav>
         <div className="flex flex-col items-center gap-3 py-5">
           <Button asChild variant="ghost" size="icon" aria-label="Open docs" title="Docs">
-            <a href="/docs">
+            <a href={docsUrl} target="_blank" rel="noreferrer">
               <BookOpen className="h-4 w-4" />
             </a>
           </Button>
@@ -191,7 +192,9 @@ export function AppLayout() {
               </NavLink>
             ))}
             <a
-              href="/docs"
+              href={docsUrl}
+              target="_blank"
+              rel="noreferrer"
               className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
             >
               <BookOpen className="h-4 w-4" />
