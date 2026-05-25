@@ -65,10 +65,10 @@ export function VfsBrowser() {
       <div className="grid gap-3 rounded-2xl border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(280px,0.9fr)]">
         <div className="space-y-2">
           <p className="text-sm font-semibold">Create folder</p>
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px]">
             <Input value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} placeholder="Season 02" />
             <Button
-              className="shrink-0 whitespace-nowrap px-4"
+              className="w-full shrink-0 justify-center whitespace-nowrap px-4"
               onClick={() => {
                 if (!newFolderName.trim()) return;
                 createFolder.mutate(joinPath(path, newFolderName.trim()));
@@ -81,10 +81,10 @@ export function VfsBrowser() {
         </div>
         <div className="space-y-2">
           <p className="text-sm font-semibold">Create file</p>
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px]">
             <Input value={newFileName} onChange={(event) => setNewFileName(event.target.value)} placeholder="notes.txt" />
             <Button
-              className="shrink-0 whitespace-nowrap px-4"
+              className="w-full shrink-0 justify-center whitespace-nowrap px-4"
               onClick={() => {
                 if (!newFileName.trim()) return;
                 createFile.mutate(joinPath(path, newFileName.trim()));

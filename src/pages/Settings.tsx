@@ -519,6 +519,7 @@ export function Settings() {
     const streaming = Math.min(total, Math.max(6, Math.ceil(total * 0.2)));
     setPolicyDraft({ ...policyDraft, streamingPriority: 80, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(1, total - streaming) });
   };
+  const wideSettingsTab = settingsTab === "quality" || settingsTab === "logs";
 
   return (
     <div className="space-y-5">
@@ -551,7 +552,7 @@ export function Settings() {
         ))}
       </div>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className={`grid gap-4 ${wideSettingsTab ? "lg:grid-cols-1" : "lg:grid-cols-2"}`}>
         <SettingsCard title="NZBHydra2" tab="integrations" activeTab={settingsTab}>
           <LabeledInput label="URL" value={draft.nzbhydraUrl ?? ""} onChange={(value) => setDraft({ ...draft, nzbhydraUrl: value })} />
           <LabeledInput label="API key" value={draft.nzbhydraApiKey ?? ""} onChange={(value) => setDraft({ ...draft, nzbhydraApiKey: value })} />
@@ -1111,7 +1112,27 @@ export function Settings() {
                     variant="outline"
                     size="icon"
                     disabled={!task.manualRunnable || task.status === "running"}
-                    onClick={() => api.runTask(task.id).then(() => queryClient.invalidateQueries({ queryKey: ["tasks"] }))}
+                    onClick={() => {
+                      api.runTask(task.id)
+                        .then((result) => {
+                          if (result.skipped) {
+                            notify(
+                              result.reason === "already_running"
+                                ? `${task.name} already running`
+                                : result.reason === "conflicting_task_running"
+                                  ? "Another library task is already running"
+                                  : `${task.name} skipped`
+                            );
+                          } else {
+                            notify(`${task.name} queued`);
+                          }
+                        })
+                        .catch((error) => notify(error instanceof Error ? error.message : "Could not start task"))
+                        .finally(() => {
+                          void tasks.refetch();
+                          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                        });
+                    }}
                   >
                     <Play className="h-4 w-4" />
                   </Button>
@@ -1151,6 +1172,35 @@ export function Settings() {
                   {task.lastError ? <p className="mt-1 text-xs text-destructive">{task.lastError}</p> : null}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    className="shrink-0"
+                    variant="outline"
+                    size="icon"
+                    disabled={!task.manualRunnable || task.status === "running"}
+                    onClick={() => {
+                      api.runTask(task.id)
+                        .then((result) => {
+                          if (result.skipped) {
+                            notify(
+                              result.reason === "already_running"
+                                ? `${task.name} already running`
+                                : result.reason === "conflicting_task_running"
+                                  ? "Another library task is already running"
+                                  : `${task.name} skipped`
+                            );
+                          } else {
+                            notify(`${task.name} queued`);
+                          }
+                        })
+                        .catch((error) => notify(error instanceof Error ? error.message : "Could not start task"))
+                        .finally(() => {
+                          void tasks.refetch();
+                          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                        });
+                    }}
+                  >
+                    <Play className="h-4 w-4" />
+                  </Button>
                   <Button className="shrink-0" variant="outline" size="icon" onClick={() => tasks.refetch()}>
                     <RefreshCw className="h-4 w-4" />
                   </Button>
