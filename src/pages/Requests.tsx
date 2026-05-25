@@ -18,7 +18,7 @@ export function Requests() {
   const requests = useQuery({ queryKey: ["requests"], queryFn: api.requests, refetchInterval: 15000 });
   const sync = useRefreshMutation(() => api.syncRequests(), [["requests"]], { success: "Requests synced." });
   const fullSyncRefresh = useRefreshMutation(() => api.fullSyncRefresh(), [["requests"], ["library"], ["downloads", "queue"]], {
-    success: "Full request resync and library refresh completed."
+    success: "Full request resync queued."
   });
   const approve = useRefreshMutation((id: string) => api.approveRequest(id), [["requests"]], { success: "Request approved." });
   const reject = useRefreshMutation((id: string) => api.rejectRequest(id), [["requests"]], { success: "Request rejected." });
@@ -75,15 +75,7 @@ export function Requests() {
               notify("Running full Seerr resync and library rebuild...", "info");
               fullSyncRefresh.mutate(undefined, {
                 onSuccess: (result) => {
-                  const summary = [
-                    `${result.sync.imported ?? 0} imported`,
-                    `${result.sync.updated ?? 0} updated`,
-                    `${result.recoverFailed.recovered ?? 0} failed recovered`,
-                    `${result.recoverSelected.recovered ?? 0} selected recovered`,
-                    `${result.monitored.retried ?? 0} queued`,
-                    `${result.library.refreshed ?? 0} library refreshed`
-                  ].join(" · ");
-                  notify(summary, "success");
+                  notify(result.alreadyRunning ? "Full resync is already running." : "Full resync queued. Updates will appear as it progresses.", "success");
                 }
               });
             }}

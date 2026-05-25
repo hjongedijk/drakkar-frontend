@@ -394,12 +394,9 @@ export type RequestSyncResult = {
 };
 
 export type FullRequestSyncRefreshResult = {
-  sync: RequestSyncResult;
-  recoverFailed: { recovered: number };
-  recoverSelected: { recovered: number };
-  metadataBackfill: { updated: number };
-  monitored: { retried: number; skippedBecauseQueueFull?: number; pendingQueueItems?: number; queueSeedTarget?: number };
-  library: { refreshed: number; items: MediaLibraryItem[] };
+  accepted: boolean;
+  alreadyRunning: boolean;
+  message: string;
 };
 
 export type RequestMonitorSeason = {
@@ -987,7 +984,7 @@ export const api = {
   fuseStatus: () => apiRequest<FuseStatus>("/api/vfs/fuse"),
   bandwidthStatus: () => apiRequest<BandwidthStatus>("/api/vfs/bandwidth"),
   tasks: () => apiRequest<{ tasks: ScheduledTask[] }>("/api/tasks"),
-  runTask: (id: string) => apiRequest<{ task: ScheduledTask | null; skipped: boolean; reason?: string }>(`/api/tasks/${id}/run`, { method: "POST", body: "{}" }),
+  runTask: (id: string) => apiRequest<{ task: ScheduledTask | null; skipped: boolean; accepted?: boolean; reason?: string; conflictingTaskId?: string }>(`/api/tasks/${id}/run`, { method: "POST", body: "{}" }),
   refreshVfs: () => apiRequest<{ ok: boolean }>("/api/vfs/refresh", { method: "POST" }),
   imports: () => apiRequest<ImportItem[]>("/api/imports"),
   symlinks: () => apiRequest<SymlinkItem[]>("/api/symlinks"),

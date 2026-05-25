@@ -107,15 +107,7 @@ export function Library() {
       void queryClient.invalidateQueries({ queryKey: ["requests"] });
       void queryClient.invalidateQueries({ queryKey: ["library"] });
       void queryClient.invalidateQueries({ queryKey: ["downloads"] });
-      notify(
-        [
-          `${result.sync.imported ?? 0} imported`,
-          `${result.sync.updated ?? 0} updated`,
-          `${result.monitored.retried ?? 0} queued`,
-          `${result.library.refreshed ?? 0} refreshed`
-        ].join(" · "),
-        "success"
-      );
+      notify(result.alreadyRunning ? "Full resync is already running." : "Full resync queued. Updates will appear as it progresses.", "success");
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Full resync failed.", "error")
   });
