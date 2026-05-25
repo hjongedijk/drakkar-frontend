@@ -74,6 +74,7 @@ const blockReasonOptions = [
   "quality_rejected",
   "ignored_file_only",
   "unsupported_archive",
+  "grab_failed",
   "import_failed"
 ] as const;
 
