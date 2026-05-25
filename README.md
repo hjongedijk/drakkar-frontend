@@ -15,7 +15,7 @@ The frontend provides:
 
 ## Version
 
-Current frontend version: `0.3.0`
+Current frontend version: `0.3.1`
 
 ## Development
 

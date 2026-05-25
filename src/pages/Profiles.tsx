@@ -18,7 +18,7 @@ import {
 const qualityOptions = ["480p", "720p", "1080p", "2160p"];
 const languageOptions = ["english", "dutch", "multi", "dual", "french", "german", "spanish", "japanese"];
 
-export function Profiles() {
+export function Profiles({ embedded = false }: { embedded?: boolean }) {
   const [title, setTitle] = useState("Example.Movie.2026.1080p.WEB-DL.x265-GROUP");
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get("profile") ?? "";
@@ -104,10 +104,10 @@ export function Profiles() {
   const dirty = selected ? JSON.stringify(profileToDraft(selected)) !== JSON.stringify(draft) : false;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+    <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Profiles</h1>
+          {embedded ? <h2 className="text-xl font-semibold">Profiles</h2> : <h1 className="text-2xl font-semibold">Profiles</h1>}
           <Button size="icon" onClick={() => create.mutate(undefined)}><Plus className="h-4 w-4" /></Button>
         </div>
         {(profiles.data ?? []).map((profile) => (

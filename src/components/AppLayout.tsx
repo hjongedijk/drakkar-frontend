@@ -2,7 +2,6 @@ import {
   Bell,
   BookOpen,
   CalendarDays,
-  ClipboardList,
   Download,
   FileSearch,
   FolderTree,
@@ -12,10 +11,8 @@ import {
   LogOut,
   Menu,
   Moon,
-  ScrollText,
   Server,
   Settings,
-  SlidersHorizontal,
   SunMedium,
   UserRound,
   X
@@ -37,10 +34,7 @@ const navItems = [
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/downloads", label: "Queue", icon: Download },
   { to: "/health", label: "Health", icon: HeartPulse },
-  { to: "/tasks", label: "Tasks", icon: ClipboardList },
-  { to: "/profiles", label: "Quality", icon: SlidersHorizontal },
   { to: "/vfs", label: "Files", icon: FolderTree },
-  { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/services", label: "Services", icon: Server },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
@@ -53,6 +47,7 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const docsUrl = getDocsUrl();
+  const docsExternal = /^https?:\/\//i.test(docsUrl);
   const mobilePrimaryItems = navItems.slice(0, 5);
 
   return (
@@ -80,7 +75,7 @@ export function AppLayout() {
         </nav>
         <div className="flex flex-col items-center gap-3 py-5">
           <Button asChild variant="ghost" size="icon" aria-label="Open docs" title="Docs">
-            <a href={docsUrl} target="_blank" rel="noreferrer">
+            <a href={docsUrl} target={docsExternal ? "_blank" : undefined} rel={docsExternal ? "noreferrer" : undefined}>
               <BookOpen className="h-4 w-4" />
             </a>
           </Button>
@@ -150,7 +145,7 @@ export function AppLayout() {
       >
         <div
           className={cn(
-            "h-full w-[min(22rem,86vw)] border-r border-cyan-300/10 bg-background p-4 shadow-2xl transition-transform",
+            "flex h-full w-[min(22rem,86vw)] flex-col border-r border-cyan-300/10 bg-background p-4 shadow-2xl transition-transform",
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           )}
           onClick={(event) => event.stopPropagation()}
@@ -174,34 +169,37 @@ export function AppLayout() {
               <X className="h-5 w-5" />
             </button>
           </div>
-          <nav className="grid gap-2">
-            {navItems.map((item) => (
-              <NavLink
-                key={`${item.to}-${item.label}-mobile`}
-                to={item.to}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+            <nav className="grid gap-2 pb-4">
+              {navItems.map((item) => (
+                <NavLink
+                  key={`${item.to}-${item.label}-mobile`}
+                  to={item.to}
+                  onClick={() => setMobileOpen(false)}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-white/10 hover:text-foreground",
+                      isActive && "bg-white/15 text-foreground"
+                    )
+                  }
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </NavLink>
+              ))}
+              <a
+                href={docsUrl}
+                target={docsExternal ? "_blank" : undefined}
+                rel={docsExternal ? "noreferrer" : undefined}
                 onClick={() => setMobileOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-white/10 hover:text-foreground",
-                    isActive && "bg-white/15 text-foreground"
-                  )
-                }
+                className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
               >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </NavLink>
-            ))}
-            <a
-              href={docsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
-            >
-              <BookOpen className="h-4 w-4" />
-              Docs
-            </a>
-          </nav>
-          <div className="mt-4 flex gap-2">
+                <BookOpen className="h-4 w-4" />
+                Docs
+              </a>
+            </nav>
+          </div>
+          <div className="mt-4 flex shrink-0 gap-2 pb-2">
             <Button className="flex-1" variant="outline" onClick={toggleTheme} aria-label="Toggle theme" title="Toggle theme">
               {theme === "dark" ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

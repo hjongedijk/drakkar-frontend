@@ -3,6 +3,7 @@ import { HeartPulse } from "lucide-react";
 import { api } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { StatusPill } from "../components/StatusPill";
+import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 
 export function HealthPage() {
@@ -55,7 +56,7 @@ export function HealthPage() {
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b p-5">
           <h2 className="text-2xl font-semibold">Schedule</h2>
-          <StatusPill value={`Only ${Math.min(schedule.length, 10)} shown`} />
+          <StatusPill value={`${schedule.length} items loaded`} />
         </div>
 
         {schedule.length === 0 ? (
@@ -63,7 +64,7 @@ export function HealthPage() {
         ) : (
           <>
           <div className="space-y-3 p-4 md:hidden">
-            {schedule.slice(0, 10).map((item) => (
+            {schedule.map((item) => (
               <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                 <div className="font-semibold break-words">{item.name}</div>
                 <div className="mt-1 break-all text-xs text-muted-foreground">{item.path}</div>
@@ -86,7 +87,7 @@ export function HealthPage() {
                 </tr>
               </thead>
               <tbody>
-                {schedule.slice(0, 10).map((item) => (
+                {schedule.map((item) => (
                   <tr key={item.id} className="border-b border-white/5 align-top last:border-0">
                     <td className="p-4">
                       <div className="font-semibold">{item.name}</div>
@@ -101,6 +102,28 @@ export function HealthPage() {
             </table>
           </div>
           </>
+        )}
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b p-5">
+          <h2 className="text-2xl font-semibold">Recent Outcomes</h2>
+          <StatusPill value={`${health.data.recentResults.length} recent checks`} />
+        </div>
+        {health.data.recentResults.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground">No completed health-check outcomes recorded yet.</div>
+        ) : (
+          <div className="space-y-3 p-4">
+            {health.data.recentResults.map((result) => (
+              <div key={result.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Badge>{result.outcome}</Badge>
+                  <span className="text-xs text-muted-foreground">{formatDate(result.completedAt, "-")}</span>
+                </div>
+                <p className="mt-2 text-sm">{result.message || "Completed without extra details."}</p>
+              </div>
+            ))}
+          </div>
         )}
       </Card>
     </div>

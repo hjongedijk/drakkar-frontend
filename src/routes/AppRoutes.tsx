@@ -11,14 +11,11 @@ import { DiscoverSearchPage } from "../pages/DiscoverSearch";
 import { Downloads } from "../pages/Downloads";
 import { HealthPage } from "../pages/Health";
 import { Library } from "../pages/Library";
-import { Logs } from "../pages/Logs";
-import { Profiles } from "../pages/Profiles";
 import { ReleaseCalendarPage } from "../pages/ReleaseCalendar";
 import { SearchPage } from "../pages/Search";
 import { ServicesPage } from "../pages/Services";
 import { Settings } from "../pages/Settings";
 import { SetupWizard } from "../pages/SetupWizard";
-import { TasksPage } from "../pages/Tasks";
 import { VfsBrowser } from "../pages/VfsBrowser";
 import { LoginPage } from "../pages/Login";
 import { LoadingState } from "../components/PageState";
@@ -93,11 +90,11 @@ export const router = createBrowserRouter([
       { path: "health", element: <HealthPage /> },
       { path: "library", element: <Library /> },
       { path: "vfs", element: <VfsBrowser /> },
-      { path: "profiles", element: <Profiles /> },
-      { path: "tasks", element: <TasksPage /> },
+      { path: "profiles", element: <Navigate to="/settings?tab=quality" replace /> },
+      { path: "tasks", element: <Navigate to="/settings?tab=tasks" replace /> },
       { path: "services", element: <ServicesPage /> },
       { path: "settings", element: <Settings /> },
-      { path: "logs", element: <Logs /> }
+      { path: "logs", element: <Navigate to="/settings?tab=logs" replace /> }
     ]
   }
 ]);

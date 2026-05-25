@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 
-export function Logs() {
+export function Logs({ embedded = false }: { embedded?: boolean }) {
   const [level, setLevel] = useState("all");
   const [term, setTerm] = useState("");
   const logs = useQuery({ queryKey: ["logs"], queryFn: api.logs, refetchInterval: 5000 });
@@ -22,8 +22,10 @@ export function Logs() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Logs</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Operational events assembled from backend job state.</p>
+          {embedded ? <p className="text-sm text-muted-foreground">Operational events assembled from backend job state.</p> : <>
+            <h1 className="text-2xl font-semibold">Logs</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Operational events assembled from backend job state.</p>
+          </>}
         </div>
         <Button className="w-full sm:w-auto" variant="outline" asChild>
           <a href={api.logsDownloadUrl()} download>
@@ -44,8 +46,8 @@ export function Logs() {
           <Input className="pl-9" value={term} onChange={(event) => setTerm(event.target.value)} placeholder="Search logs, download IDs, request IDs" />
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border bg-card">
-        <table className="min-w-[760px] w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-border/80 bg-background/60">
+        <table className="min-w-[860px] w-full text-left text-sm">
           <thead className="border-b text-xs text-muted-foreground"><tr><th className="p-3">Time</th><th className="p-3">Level</th><th className="p-3">Service</th><th className="p-3">Message</th></tr></thead>
           <tbody>
             {rows.map((row, index) => (

@@ -1,26 +1,48 @@
 import { useQuery } from "@tanstack/react-query";
-import { Copy, File, Folder, RefreshCw, Square } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Copy, File, FilePlus2, Folder, FolderPlus, Pencil, RefreshCw, Save, Square, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import { useToast } from "../components/ToastProvider";
 import { useRefreshMutation } from "../hooks/useRefreshMutation";
 import { apiUrl } from "../config";
 
 export function VfsBrowser() {
   const [path, setPath] = useState("/");
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFileName, setNewFileName] = useState("");
+  const [renameTarget, setRenameTarget] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorContent, setEditorContent] = useState("");
   const { notify } = useToast();
   const nodes = useQuery({ queryKey: ["vfs", path], queryFn: () => api.vfsList(path) });
+  const selectedText = useQuery({
+    queryKey: ["vfs", "text", selectedPath],
+    queryFn: () => api.vfsText(selectedPath as string),
+    enabled: editorOpen && Boolean(selectedPath)
+  });
   const streams = useQuery({ queryKey: ["vfs", "streams"], queryFn: api.streamSessions, refetchInterval: 10000 });
   const metrics = useQuery({ queryKey: ["vfs", "streams", "metrics"], queryFn: api.streamMetrics, refetchInterval: 10000 });
   const fuse = useQuery({ queryKey: ["vfs", "fuse"], queryFn: api.fuseStatus, refetchInterval: 15000 });
   const bandwidth = useQuery({ queryKey: ["vfs", "bandwidth"], queryFn: api.bandwidthStatus, refetchInterval: 15000 });
   const refresh = useRefreshMutation(() => api.refreshVfs(), [["vfs", path]], { success: "VFS refreshed." });
+  const createFolder = useRefreshMutation((targetPath: string) => api.createVfsFolder(targetPath), [["vfs", path]], { success: "Folder created." });
+  const createFile = useRefreshMutation((targetPath: string) => api.createVfsFile(targetPath), [["vfs", path]], { success: "File created." });
+  const saveFile = useRefreshMutation(({ targetPath, content }: { targetPath: string; content: string }) => api.updateVfsFile(targetPath, content), [["vfs", path], ["vfs", "text", selectedPath ?? ""]], { success: "File saved." });
+  const renamePath = useRefreshMutation(({ currentPath, nextPath }: { currentPath: string; nextPath: string }) => api.renameVfsPath(currentPath, nextPath), [["vfs", path]], { success: "Path renamed." });
+  const deletePath = useRefreshMutation((targetPath: string) => api.deleteVfsPath(targetPath), [["vfs", path]], { success: "Path deleted." });
   const stopStream = useRefreshMutation((id: string) => api.stopStream(id), [["vfs", "streams"], ["vfs", "streams", "metrics"], ["vfs", "bandwidth"]], { success: "Stream stopped." });
   const crumbs = useMemo(() => path.split("/").filter(Boolean), [path]);
   const folderNodes = useMemo(() => (nodes.data ?? []).filter((node) => isFolderLike(node.type)), [nodes.data]);
+  const selectedNode = useMemo(() => (nodes.data ?? []).find((node) => node.path === selectedPath) ?? null, [nodes.data, selectedPath]);
+
+  useEffect(() => {
+    if (selectedText.data?.content != null) setEditorContent(selectedText.data.content);
+  }, [selectedText.data?.content]);
 
   return (
     <div className="space-y-5">
@@ -35,7 +57,50 @@ export function VfsBrowser() {
             })}
           </div>
         </div>
-        <Button className="w-full sm:w-auto" onClick={() => refresh.mutate(undefined)}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Button className="w-full sm:w-auto" onClick={() => refresh.mutate(undefined)}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-2xl border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(280px,0.9fr)]">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Create folder</p>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <Input value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} placeholder="Season 02" />
+            <Button
+              className="shrink-0 whitespace-nowrap px-4"
+              onClick={() => {
+                if (!newFolderName.trim()) return;
+                createFolder.mutate(joinPath(path, newFolderName.trim()));
+                setNewFolderName("");
+              }}
+            >
+              <FolderPlus className="mr-2 h-4 w-4" />Create
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Create file</p>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <Input value={newFileName} onChange={(event) => setNewFileName(event.target.value)} placeholder="notes.txt" />
+            <Button
+              className="shrink-0 whitespace-nowrap px-4"
+              onClick={() => {
+                if (!newFileName.trim()) return;
+                createFile.mutate(joinPath(path, newFileName.trim()));
+                setNewFileName("");
+              }}
+            >
+              <FilePlus2 className="mr-2 h-4 w-4" />Create
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Selected</p>
+          <div className="min-h-[76px] rounded-xl border bg-background/50 p-3 text-sm text-muted-foreground">
+            {selectedNode ? selectedNode.path : "Pick a file or folder below to rename, edit, or delete it."}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
@@ -73,7 +138,7 @@ export function VfsBrowser() {
               ) : null}
               {nodes.data.map((node) => (
                 <div key={node.path} className="rounded-lg border bg-card p-4">
-                  <button className="flex w-full items-center gap-2 text-left font-medium" onClick={() => isFolderLike(node.type) && setPath(node.path)}>
+                  <button className="flex w-full items-center gap-2 text-left font-medium" onClick={() => isFolderLike(node.type) ? setPath(node.path) : setSelectedPath(node.path)}>
                     {isFolderLike(node.type) ? <Folder className="h-4 w-4 text-primary" /> : <File className="h-4 w-4 text-muted-foreground" />}
                     <span className="break-words">{node.name}</span>
                   </button>
@@ -84,6 +149,11 @@ export function VfsBrowser() {
                   <p className="mt-2 text-xs text-muted-foreground">{node.type === "folder" ? "-" : formatBytes(node.size)}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button variant="ghost" size="icon" title="Copy VFS path" onClick={() => navigator.clipboard?.writeText(node.path).then(() => notify("VFS path copied.", "success"))}><Copy className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" title="Rename" onClick={() => { setSelectedPath(node.path); setRenameTarget(node.name); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    {!isFolderLike(node.type) ? <Button variant="ghost" size="icon" title="Edit text file" onClick={() => { setSelectedPath(node.path); setEditorOpen(true); }}><Pencil className="h-4 w-4" /></Button> : null}
+                    <Button variant="ghost" size="icon" title="Delete" onClick={() => { if (window.confirm(`Delete ${node.name}?`)) deletePath.mutate(node.path); }}><Trash2 className="h-4 w-4" /></Button>
                     {!isFolderLike(node.type) && node.type !== "archive-file" && <Button variant="outline" asChild><a href={apiUrl(`/api/vfs/stream?path=${encodeURIComponent(node.path)}`)}>Open</a></Button>}
                   </div>
                 </div>
@@ -110,7 +180,7 @@ export function VfsBrowser() {
                   {nodes.data.map((node) => (
                     <tr key={node.path} className="border-b last:border-0">
                       <td className="p-3">
-                        <button className="flex items-center gap-2 font-medium" onClick={() => isFolderLike(node.type) && setPath(node.path)}>
+                        <button className="flex items-center gap-2 font-medium" onClick={() => isFolderLike(node.type) ? setPath(node.path) : setSelectedPath(node.path)}>
                           {isFolderLike(node.type) ? <Folder className="h-4 w-4 text-primary" /> : <File className="h-4 w-4 text-muted-foreground" />}
                           {node.name}
                         </button>
@@ -119,8 +189,13 @@ export function VfsBrowser() {
                       <td className="p-3"><Badge>{node.status ?? (node.type === "archive-file" ? "requires_extract" : "ready")}</Badge></td>
                       <td className="p-3 text-muted-foreground">{node.type === "folder" ? "-" : formatBytes(node.size)}</td>
                       <td className="p-3 text-right">
-                        <Button variant="ghost" size="icon" title="Copy VFS path" onClick={() => navigator.clipboard?.writeText(node.path).then(() => notify("VFS path copied.", "success"))}><Copy className="h-4 w-4" /></Button>
-                        {!isFolderLike(node.type) && node.type !== "archive-file" && <Button variant="outline" asChild><a href={apiUrl(`/api/vfs/stream?path=${encodeURIComponent(node.path)}`)}>Open</a></Button>}
+                        <div className="flex justify-end gap-1 whitespace-nowrap">
+                          <Button variant="ghost" size="icon" title="Copy VFS path" onClick={() => navigator.clipboard?.writeText(node.path).then(() => notify("VFS path copied.", "success"))}><Copy className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" title="Rename" onClick={() => { setSelectedPath(node.path); setRenameTarget(node.name); }}><Pencil className="h-4 w-4" /></Button>
+                          {!isFolderLike(node.type) ? <Button variant="ghost" size="icon" title="Edit text file" onClick={() => { setSelectedPath(node.path); setEditorOpen(true); }}><Pencil className="h-4 w-4" /></Button> : null}
+                          <Button variant="ghost" size="icon" title="Delete" onClick={() => { if (window.confirm(`Delete ${node.name}?`)) deletePath.mutate(node.path); }}><Trash2 className="h-4 w-4" /></Button>
+                          {!isFolderLike(node.type) && node.type !== "archive-file" && <Button className="whitespace-nowrap" variant="outline" asChild><a href={apiUrl(`/api/vfs/stream?path=${encodeURIComponent(node.path)}`)}>Open</a></Button>}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -131,6 +206,42 @@ export function VfsBrowser() {
           )}
         </div>
       </div>
+
+      {selectedNode ? (
+        <section className="space-y-3 rounded-2xl border bg-card p-4">
+          <h2 className="text-sm font-semibold">Selected path actions</h2>
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+            <Input value={renameTarget} onChange={(event) => setRenameTarget(event.target.value)} placeholder={selectedNode.name} />
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!renameTarget.trim()) return;
+                renamePath.mutate({ currentPath: selectedNode.path, nextPath: joinPath(parentPath(selectedNode.path) ?? "/", renameTarget.trim()) });
+              }}
+            >
+              <Pencil className="mr-2 h-4 w-4" />Rename
+            </Button>
+          </div>
+          {editorOpen && selectedPath ? (
+            <div className="space-y-2">
+              <textarea
+                className="min-h-72 w-full rounded-xl border bg-background p-3 font-mono text-sm"
+                value={editorContent}
+                onChange={(event) => setEditorContent(event.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => saveFile.mutate({ targetPath: selectedPath, content: editorContent })}
+                  disabled={!selectedText.data}
+                >
+                  <Save className="mr-2 h-4 w-4" />Save file
+                </Button>
+                <Button variant="outline" onClick={() => setEditorOpen(false)}>Close editor</Button>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-4">
         <div className="rounded-lg border bg-card p-4">
@@ -217,6 +328,11 @@ function parentPath(path: string) {
   const parts = path.split("/").filter(Boolean);
   parts.pop();
   return parts.length ? `/${parts.join("/")}` : "/";
+}
+
+function joinPath(base: string, name: string) {
+  const trimmedBase = base === "/" ? "" : base.replace(/\/+$/, "");
+  return `${trimmedBase}/${name.replace(/^\/+/, "")}`;
 }
 
 function formatBytes(value: number) {

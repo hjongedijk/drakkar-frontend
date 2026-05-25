@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree, Library, Pencil, PlugZap, Plus, Save, Settings2, ShieldAlert, Trash2, Wifi, X } from "lucide-react";
+import { ClipboardList, FolderTree, Library, Pencil, Play, PlugZap, Plus, RefreshCw, Save, ScrollText, Settings2, ShieldAlert, SlidersHorizontal, Trash2, Users, Wifi, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -13,8 +13,10 @@ import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { useToast } from "../components/ToastProvider";
 import { setFrontendApiToken } from "../config";
+import { Logs } from "./Logs";
+import { Profiles } from "./Profiles";
 
-type SettingsTab = "integrations" | "providers" | "queue" | "library" | "rules" | "system";
+type SettingsTab = "integrations" | "providers" | "queue" | "library" | "rules" | "tasks" | "quality" | "logs" | "users" | "system";
 
 const defaultRequestProvider: RequestProviderInput = {
   type: "seerr",
@@ -84,8 +86,21 @@ const settingsTabs: Array<{ value: SettingsTab; label: string; short: string; ic
   { value: "queue", label: "Queue", short: "Queue", icon: Settings2 },
   { value: "library", label: "Library", short: "Names", icon: Library },
   { value: "rules", label: "Rules", short: "Rules", icon: ShieldAlert },
+  { value: "tasks", label: "Tasks", short: "Tasks", icon: ClipboardList },
+  { value: "quality", label: "Quality", short: "Quality", icon: SlidersHorizontal },
+  { value: "logs", label: "Logs", short: "Logs", icon: ScrollText },
+  { value: "users", label: "Users", short: "Users", icon: Users },
   { value: "system", label: "System", short: "System", icon: FolderTree }
 ];
+
+function subtitleProviderOrder(primary: "subdl" | "opensubtitlescom") {
+  return primary === "subdl" ? ["subdl", "opensubtitlescom"] as const : ["opensubtitlescom", "subdl"] as const;
+}
+
+const preferredDefaultProfiles = {
+  movie: "Movie Standard",
+  tv: "TV Standard"
+} as const;
 
 export function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -95,6 +110,8 @@ export function Settings() {
   const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const providers = useQuery({ queryKey: ["request-providers"], queryFn: api.requestProviders });
   const usenet = useQuery({ queryKey: ["usenet"], queryFn: api.usenetServers });
+  const tasks = useQuery({ queryKey: ["tasks"], queryFn: api.tasks, refetchInterval: 5000 });
+  const adminUsers = useQuery({ queryKey: ["admin-users"], queryFn: api.adminUsers, enabled: user?.isAdmin === true });
   const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const policies = useQuery({ queryKey: ["policies"], queryFn: api.policies });
   const ignoredFiles = useQuery({ queryKey: ["ignored-files"], queryFn: api.ignoredFiles });
@@ -142,6 +159,8 @@ export function Settings() {
   const [profileDraft, setProfileDraft] = useState({ username: user?.username ?? "admin", displayName: user?.displayName ?? "admin" });
   const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "" });
   const [rotatedDrakkarApiToken, setRotatedDrakkarApiToken] = useState<string | null>(null);
+  const [newUserDraft, setNewUserDraft] = useState({ username: "", displayName: "", password: "", isAdmin: false, mustChangePassword: true });
+  const [resetPasswordDraft, setResetPasswordDraft] = useState<Record<string, string>>({});
   const [testResult, setTestResult] = useState<string | null>(null);
   const [plexMessage, setPlexMessage] = useState<string | null>(null);
   const [plexPin, setPlexPin] = useState<{ pinId: number; code: string; authUrl: string } | null>(null);
@@ -331,6 +350,40 @@ export function Settings() {
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not rotate Drakkar API token", "error")
   });
+  const createAdminUser = useMutation({
+    mutationFn: () => api.createAdminUser(newUserDraft),
+    onSuccess: () => {
+      notify("User created");
+      setNewUserDraft({ username: "", displayName: "", password: "", isAdmin: false, mustChangePassword: true });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not create user")
+  });
+  const updateAdminUser = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { username?: string; displayName?: string; isAdmin?: boolean; mustChangePassword?: boolean } }) =>
+      api.updateAdminUser(id, payload),
+    onSuccess: () => {
+      notify("User updated");
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not update user")
+  });
+  const resetAdminPassword = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) => api.resetAdminUserPassword(id, password),
+    onSuccess: (_, variables) => {
+      setResetPasswordDraft((current) => ({ ...current, [variables.id]: "" }));
+      notify("Password reset");
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not reset password")
+  });
+  const deleteAdminUser = useMutation({
+    mutationFn: (id: string) => api.deleteAdminUser(id),
+    onSuccess: () => {
+      notify("User deleted");
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not delete user")
+  });
   const resetEnvironment = useMutation({
     mutationFn: () => api.resetEnvironment(),
     onSuccess: () => {
@@ -368,8 +421,14 @@ export function Settings() {
   });
 
   useEffect(() => {
-    if (settings.data) setDraft(settings.data);
-  }, [settings.data]);
+    if (!settings.data) return;
+    const profileNames = profiles.data?.map((profile) => profile.name) ?? [];
+    setDraft({
+      ...settings.data,
+      defaultMovieProfile: resolveDefaultProfileValue(profileNames, settings.data.defaultMovieProfile, preferredDefaultProfiles.movie),
+      defaultTvProfile: resolveDefaultProfileValue(profileNames, settings.data.defaultTvProfile, preferredDefaultProfiles.tv)
+    });
+  }, [settings.data, profiles.data]);
   useEffect(() => {
     if (policies.data) setPolicyDraft(policies.data);
   }, [policies.data]);
@@ -473,7 +532,7 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 rounded-2xl border bg-card p-2 sm:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 rounded-3xl border bg-card/90 p-2 sm:grid-cols-5 xl:grid-cols-10">
         {settingsTabs.map((tab) => (
           <Button
             key={tab.value}
@@ -505,10 +564,10 @@ export function Settings() {
           <p className="text-sm text-muted-foreground">These profiles are used for automatic request searches unless a Seerr provider overrides them.</p>
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledSelect label="Default movie profile" value={draft.defaultMovieProfile ?? ""} onChange={(value) => setDraft({ ...draft, defaultMovieProfile: value })}>
-              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
             </LabeledSelect>
             <LabeledSelect label="Default TV profile" value={draft.defaultTvProfile ?? ""} onChange={(value) => setDraft({ ...draft, defaultTvProfile: value })}>
-              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
             </LabeledSelect>
           </div>
         </SettingsCard>
@@ -562,11 +621,11 @@ export function Settings() {
                       <LabeledInput label="Sync minutes" type="number" value={String(editingProvider.syncIntervalMinutes)} onChange={(value) => setEditingProvider({ ...editingProvider, syncIntervalMinutes: Number(value) })} />
                       <LabeledSelect label="Movie profile" value={editingProvider.defaultMovieProfile ?? ""} onChange={(value) => setEditingProvider({ ...editingProvider, defaultMovieProfile: value || undefined })}>
                         <option value="">Use global default</option>
-                        {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                        {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
                       </LabeledSelect>
                       <LabeledSelect label="TV profile" value={editingProvider.defaultTvProfile ?? ""} onChange={(value) => setEditingProvider({ ...editingProvider, defaultTvProfile: value || undefined })}>
                         <option value="">Use global default</option>
-                        {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                        {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
                       </LabeledSelect>
                       <CheckboxLabel label="Enabled" checked={editingProvider.enabled} onChange={(checked) => setEditingProvider({ ...editingProvider, enabled: checked })} />
                     </div>
@@ -595,11 +654,11 @@ export function Settings() {
             <LabeledInput label="Sync minutes" type="number" value={String(requestProvider.syncIntervalMinutes)} onChange={(value) => setRequestProvider({ ...requestProvider, syncIntervalMinutes: Number(value) })} />
             <LabeledSelect label="Movie profile" value={requestProvider.defaultMovieProfile ?? ""} onChange={(value) => setRequestProvider({ ...requestProvider, defaultMovieProfile: value || undefined })}>
               <option value="">Use global default</option>
-              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
             </LabeledSelect>
             <LabeledSelect label="TV profile" value={requestProvider.defaultTvProfile ?? ""} onChange={(value) => setRequestProvider({ ...requestProvider, defaultTvProfile: value || undefined })}>
               <option value="">Use global default</option>
-              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              {(profiles.data ?? []).map((profile) => <option key={profile.id} value={profile.name}>{profile.name}</option>)}
             </LabeledSelect>
             <CheckboxLabel label="Enabled" checked={requestProvider.enabled} onChange={(checked) => setRequestProvider({ ...requestProvider, enabled: checked })} />
           </div>
@@ -613,6 +672,121 @@ export function Settings() {
             <LabeledInput label="TVDB API key" value={draft.tvdbApiKey ?? ""} onChange={(value) => setDraft({ ...draft, tvdbApiKey: value })} />
             <LabeledInput label="Language" value={draft.metadataLanguage} onChange={(value) => setDraft({ ...draft, metadataLanguage: value || "en-US" })} />
             <LabeledInput label="Cache hours" type="number" value={String(draft.metadataCacheTtlHours)} onChange={(value) => setDraft({ ...draft, metadataCacheTtlHours: Number(value) || 168 })} />
+          </div>
+        </SettingsCard>
+        <SettingsCard title="Subtitles" tab="integrations" activeTab={settingsTab}>
+          <p className="text-sm text-muted-foreground">Built-in sidecar subtitle downloader. Drakkar writes normal <code>.srt</code> files next to the movie or episode link after import and during backfill. Providers are used in order and only remaining missing languages fall through to the next provider.</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <CheckboxLabel label="Enable built-in subtitles" checked={draft.subtitlesEnabled} onChange={(checked) => setDraft({ ...draft, subtitlesEnabled: checked })} />
+            <LabeledSelect
+              label="Primary provider"
+              value={draft.subtitleProviderOrder?.[0] ?? "subdl"}
+              onChange={(value) => setDraft({
+                ...draft,
+                subtitlesProvider: value as "subdl" | "opensubtitlescom",
+                subtitleProviderOrder: [...subtitleProviderOrder(value as "subdl" | "opensubtitlescom")]
+              })}
+            >
+              <option value="subdl">SubDL</option>
+              <option value="opensubtitlescom">OpenSubtitles.com</option>
+            </LabeledSelect>
+            <LabeledInput
+              label="Languages"
+              value={(draft.subtitleLanguages ?? []).join(",")}
+              onChange={(value) => setDraft({
+                ...draft,
+                subtitleLanguages: value.split(/[,\s]+/).map((item) => item.trim().toUpperCase()).filter(Boolean)
+              })}
+            />
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="font-semibold">SubDL</p>
+                <CheckboxLabel
+                  label="Enabled"
+                  checked={draft.subtitleProviders.subdl.enabled}
+                  onChange={(checked) => setDraft({
+                    ...draft,
+                    subtitleProviders: {
+                      ...draft.subtitleProviders,
+                      subdl: { ...draft.subtitleProviders.subdl, enabled: checked }
+                    }
+                  })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <LabeledInput
+                  label="SubDL API key"
+                  type="password"
+                  value={draft.subtitleProviders.subdl.apiKey ?? ""}
+                  onChange={(value) => setDraft({
+                    ...draft,
+                    subtitlesApiKey: draft.subtitlesProvider === "subdl" ? value : draft.subtitlesApiKey,
+                    subtitleProviders: {
+                      ...draft.subtitleProviders,
+                      subdl: { ...draft.subtitleProviders.subdl, apiKey: value }
+                    }
+                  })}
+                />
+              </div>
+            </div>
+            <div className="rounded-2xl border p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="font-semibold">OpenSubtitles.com</p>
+                <CheckboxLabel
+                  label="Enabled"
+                  checked={draft.subtitleProviders.opensubtitlescom.enabled}
+                  onChange={(checked) => setDraft({
+                    ...draft,
+                    subtitleProviders: {
+                      ...draft.subtitleProviders,
+                      opensubtitlescom: { ...draft.subtitleProviders.opensubtitlescom, enabled: checked }
+                    }
+                  })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <LabeledInput
+                  label="API key"
+                  type="password"
+                  value={draft.subtitleProviders.opensubtitlescom.apiKey ?? ""}
+                  onChange={(value) => setDraft({
+                    ...draft,
+                    subtitlesApiKey: draft.subtitlesProvider === "opensubtitlescom" ? value : draft.subtitlesApiKey,
+                    subtitleProviders: {
+                      ...draft.subtitleProviders,
+                      opensubtitlescom: { ...draft.subtitleProviders.opensubtitlescom, apiKey: value }
+                    }
+                  })}
+                />
+                <LabeledInput
+                  label="Username"
+                  value={draft.subtitleProviders.opensubtitlescom.username ?? ""}
+                  onChange={(value) => setDraft({
+                    ...draft,
+                    subtitlesUsername: value,
+                    subtitleProviders: {
+                      ...draft.subtitleProviders,
+                      opensubtitlescom: { ...draft.subtitleProviders.opensubtitlescom, username: value }
+                    }
+                  })}
+                />
+                <LabeledInput
+                  label="Password"
+                  type="password"
+                  value={draft.subtitleProviders.opensubtitlescom.password ?? ""}
+                  onChange={(value) => setDraft({
+                    ...draft,
+                    subtitlesPassword: value,
+                    subtitleProviders: {
+                      ...draft.subtitleProviders,
+                      opensubtitlescom: { ...draft.subtitleProviders.opensubtitlescom, password: value }
+                    }
+                  })}
+                />
+              </div>
+            </div>
           </div>
         </SettingsCard>
         <SettingsCard title="Usenet Providers" tab="providers" activeTab={settingsTab}>
@@ -697,7 +871,7 @@ export function Settings() {
         <SettingsCard title="Redis / PostgreSQL" tab="system" activeTab={settingsTab}>
           <p className="text-sm text-muted-foreground">Connection state is shown on the dashboard and health endpoint.</p>
         </SettingsCard>
-        <SettingsCard title="Account" tab="system" activeTab={settingsTab}>
+        <SettingsCard title="Account" tab="users" activeTab={settingsTab}>
           {user?.mustChangePassword ? (
             <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
               This account is still using the bootstrap password. Change it now before using the rest of Drakkar.
@@ -922,10 +1096,144 @@ export function Settings() {
             ))}
           </div>
         </SettingsCard>
-        <SettingsCard title="FUSE / SAB API" tab="system" activeTab={settingsTab}>
+        <SettingsCard title="Task Intervals" tab="tasks" activeTab={settingsTab}>
+          <p className="text-sm text-muted-foreground">Leave a field empty to use the built-in schedule. Values are saved in minutes and applied to the next task cycle automatically.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {(tasks.data?.tasks ?? []).map((task) => (
+              <div key={task.id} className="rounded-2xl border border-border/80 bg-background/60 p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">{task.name}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p>
+                  </div>
+                  <Button
+                    className="shrink-0"
+                    variant="outline"
+                    size="icon"
+                    disabled={!task.manualRunnable || task.status === "running"}
+                    onClick={() => api.runTask(task.id).then(() => queryClient.invalidateQueries({ queryKey: ["tasks"] }))}
+                  >
+                    <Play className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                  <LabeledInput
+                    label="Custom interval minutes"
+                    type="number"
+                    value={draft.taskIntervals?.[task.id] ? String(Math.round((draft.taskIntervals[task.id] ?? 0) / 60000)) : ""}
+                    onChange={(value) =>
+                      setDraft({
+                        ...draft,
+                        taskIntervals: {
+                          ...(draft.taskIntervals ?? {}),
+                          [task.id]: value.trim() ? Math.max(1, Number(value) || 0) * 60_000 : null
+                        }
+                      })}
+                  />
+                  <div className="rounded-xl border border-border/70 bg-card/70 px-3 py-2 text-xs font-medium text-muted-foreground md:mb-0.5">
+                    Effective now: {formatInterval(task.intervalMs)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SettingsCard>
+        <SettingsCard title="Live Task Status" tab="tasks" activeTab={settingsTab}>
+          <div className="space-y-2">
+            {(tasks.data?.tasks ?? []).map((task) => (
+              <div key={`${task.id}-status`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/60 px-4 py-3 shadow-sm">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{task.name}</p>
+                    <Badge className={taskStatusClassName(task.status)}>{task.status}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Last {formatTaskDate(task.lastCompletedAt ?? task.lastStartedAt, "Never")} · Next {task.enabled ? formatTaskDate(task.nextRunAt, task.intervalMs ? "Pending" : "Manual") : "Disabled"}</p>
+                  {task.lastError ? <p className="mt-1 text-xs text-destructive">{task.lastError}</p> : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button className="shrink-0" variant="outline" size="icon" onClick={() => tasks.refetch()}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SettingsCard>
+        <SettingsCard title="Quality Profiles" tab="quality" activeTab={settingsTab} fullWidth flush>
+          <Profiles embedded />
+        </SettingsCard>
+        <SettingsCard title="Operational Logs" tab="logs" activeTab={settingsTab} fullWidth flush>
+          <Logs embedded />
+        </SettingsCard>
+        <SettingsCard title="User / Group Management" tab="users" activeTab={settingsTab} fullWidth>
+          {user?.isAdmin ? (
+            <div className="space-y-4">
+              <div className="grid gap-2 md:grid-cols-5">
+                <Input value={newUserDraft.username} onChange={(event) => setNewUserDraft({ ...newUserDraft, username: event.target.value })} placeholder="username" />
+                <Input value={newUserDraft.displayName} onChange={(event) => setNewUserDraft({ ...newUserDraft, displayName: event.target.value })} placeholder="display name" />
+                <Input type="password" value={newUserDraft.password} onChange={(event) => setNewUserDraft({ ...newUserDraft, password: event.target.value })} placeholder="temporary password" />
+                <Select value={newUserDraft.isAdmin ? "admin" : "standard"} onChange={(event) => setNewUserDraft({ ...newUserDraft, isAdmin: event.target.value === "admin" })}>
+                  <option value="standard">Standard</option>
+                  <option value="admin">Admin</option>
+                </Select>
+                <Button onClick={() => createAdminUser.mutate()} disabled={!newUserDraft.username.trim() || !newUserDraft.password.trim()}>Create user</Button>
+              </div>
+              <div className="space-y-2">
+                {(adminUsers.data?.users ?? []).map((managedUser) => (
+                  <div key={managedUser.id} className="rounded-xl border bg-background/50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold">{managedUser.displayName} <span className="text-muted-foreground">({managedUser.username})</span></p>
+                        <p className="text-xs text-muted-foreground">{managedUser.group} · created {formatTaskDate(managedUser.createdAt, "-")}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" onClick={() => updateAdminUser.mutate({ id: managedUser.id, payload: { isAdmin: !managedUser.isAdmin } })}>
+                          {managedUser.isAdmin ? "Make standard" : "Make admin"}
+                        </Button>
+                        <Button variant="outline" onClick={() => updateAdminUser.mutate({ id: managedUser.id, payload: { mustChangePassword: !managedUser.mustChangePassword } })}>
+                          {managedUser.mustChangePassword ? "Clear password flag" : "Force password change"}
+                        </Button>
+                        <Input
+                          className="w-44"
+                          type="password"
+                          value={resetPasswordDraft[managedUser.id] ?? ""}
+                          onChange={(event) => setResetPasswordDraft((current) => ({ ...current, [managedUser.id]: event.target.value }))}
+                          placeholder="new password"
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() => resetAdminPassword.mutate({ id: managedUser.id, password: resetPasswordDraft[managedUser.id] ?? "" })}
+                          disabled={!(resetPasswordDraft[managedUser.id] ?? "").trim()}
+                        >
+                          Reset password
+                        </Button>
+                        {managedUser.id !== user.id ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Delete user"
+                            onClick={() => {
+                              if (!window.confirm(`Delete ${managedUser.username}?`)) return;
+                              deleteAdminUser.mutate(managedUser.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Admin access required.</p>
+          )}
+        </SettingsCard>
+        <SettingsCard title="FUSE / SAB API" tab="system" activeTab={settingsTab} fullWidth>
           <p className="text-sm text-muted-foreground">Drakkar mounts releases through FUSE at <span className="font-mono text-foreground">/mnt/fuse</span>, while Plex/library files live at <span className="font-mono text-foreground">/mnt/media</span>. SAB compatibility stays available for tools that push NZBs.</p>
         </SettingsCard>
-        <SettingsCard title="Danger Zone" tab="system" activeTab={settingsTab}>
+        <SettingsCard title="Danger Zone" tab="system" activeTab={settingsTab} fullWidth>
           <div className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
             <p className="text-sm text-destructive">Clears the full blacklist and removes all downloaded, completed, imported, and library-linked media so the environment starts clean again.</p>
             <Button
@@ -947,9 +1255,30 @@ export function Settings() {
   );
 }
 
-function SettingsCard({ title, children, tab, activeTab }: { title: string; children: ReactNode; tab: SettingsTab; activeTab: SettingsTab }) {
+function SettingsCard({
+  title,
+  children,
+  tab,
+  activeTab,
+  fullWidth = false,
+  flush = false
+}: {
+  title: string;
+  children: ReactNode;
+  tab: SettingsTab;
+  activeTab: SettingsTab;
+  fullWidth?: boolean;
+  flush?: boolean;
+}) {
   if (tab !== activeTab) return null;
-  return <Card className="space-y-3 p-4"><h2 className="text-sm font-semibold">{title}</h2>{children}</Card>;
+  return (
+    <Card className={`space-y-3 ${fullWidth ? "lg:col-span-2" : ""} ${flush ? "p-0" : "p-4"}`}>
+      <div className={flush ? "px-4 pt-4" : ""}>
+        <h2 className="text-sm font-semibold">{title}</h2>
+      </div>
+      <div className={flush ? "px-4 pb-4" : ""}>{children}</div>
+    </Card>
+  );
 }
 
 function LabeledInput({ label, value, onChange, type = "text", disabled = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; disabled?: boolean }) {
@@ -971,6 +1300,42 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <p className="text-lg font-semibold">{value}</p>
     </div>
   );
+}
+
+function formatInterval(value?: number | null) {
+  if (!value) return "Manual / startup";
+  const seconds = Math.round(value / 1000);
+  if (seconds < 60) return `${seconds} sec`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hr`;
+}
+
+function formatTaskDate(value: string | null, fallback: string) {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleString([], {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function resolveDefaultProfileValue(profileNames: string[], currentValue: string | undefined, preferredValue: string) {
+  if (currentValue === "Anime" && profileNames.includes(preferredValue)) return preferredValue;
+  if (currentValue && profileNames.includes(currentValue)) return currentValue;
+  if (profileNames.includes(preferredValue)) return preferredValue;
+  return profileNames[0] ?? currentValue ?? "";
+}
+
+function taskStatusClassName(status: string) {
+  if (status === "running") return "border-cyan-500/30 bg-cyan-500/10 text-cyan-200";
+  if (status === "success") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+  if (status === "error") return "border-red-500/30 bg-red-500/10 text-red-200";
+  return "border-border/80 bg-muted text-muted-foreground";
 }
 
 function topCountLabel(values?: Record<string, number>) {

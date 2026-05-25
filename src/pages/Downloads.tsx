@@ -5,6 +5,7 @@ import { api, type Download as DownloadType } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Select } from "../components/ui/select";
 import { useRefreshMutation } from "../hooks/useRefreshMutation";
 import { useToast } from "../components/ToastProvider";
 
@@ -13,12 +14,28 @@ export function Downloads() {
   const [tab, setTab] = useState<"queue" | "history">("queue");
   const [queuePage, setQueuePage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState<50 | 100 | "all">(50);
+  const [historyPageSize, setHistoryPageSize] = useState<50 | 100 | "all">(50);
   const [url, setUrl] = useState("");
   const [urlTestResult, setUrlTestResult] = useState<string | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const queueSummary = useQuery({ queryKey: ["downloads", "queue"], queryFn: api.queue, refetchInterval: 1000, refetchOnWindowFocus: false });
-  const queue = useQuery({ queryKey: ["downloads", "queue", queuePage], queryFn: () => api.queuePage(queuePage, 25), refetchInterval: 1000, refetchOnWindowFocus: false });
-  const history = useQuery({ queryKey: ["downloads", "history", historyPage], queryFn: () => api.historyPage(historyPage, 25), refetchInterval: 20000, refetchOnWindowFocus: false });
+  const queue = useQuery({
+    queryKey: ["downloads", "queue", queuePage, queuePageSize],
+    queryFn: () => queuePageSize === "all"
+      ? api.queue().then((items) => ({ items, page: 1, totalPages: 1, total: items.length, limit: items.length }))
+      : api.queuePage(queuePage, queuePageSize),
+    refetchInterval: 1000,
+    refetchOnWindowFocus: false
+  });
+  const history = useQuery({
+    queryKey: ["downloads", "history", historyPage, historyPageSize],
+    queryFn: () => historyPageSize === "all"
+      ? api.history().then((items) => ({ items, page: 1, totalPages: 1, total: items.length, limit: items.length }))
+      : api.historyPage(historyPage, historyPageSize),
+    refetchInterval: 20000,
+    refetchOnWindowFocus: false
+  });
   const status = useQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 2000, refetchOnWindowFocus: false });
   const streamMetrics = useQuery({ queryKey: ["streams", "metrics"], queryFn: api.streamMetrics, refetchInterval: 1000, refetchOnWindowFocus: false });
   const addUrl = useRefreshMutation((value: string) => api.addUrl(value), [["downloads", "queue"]], { success: "NZB URL queued" });
@@ -165,6 +182,24 @@ export function Downloads() {
             Clean up failed
           </Button>
         ) : null}
+        <Select
+          className="w-36"
+          value={String(tab === "queue" ? queuePageSize : historyPageSize)}
+          onChange={(event) => {
+            const value = event.target.value === "all" ? "all" : Number(event.target.value) as 50 | 100;
+            if (tab === "queue") {
+              setQueuePage(1);
+              setQueuePageSize(value);
+            } else {
+              setHistoryPage(1);
+              setHistoryPageSize(value);
+            }
+          }}
+        >
+          <option value="50">50 / page</option>
+          <option value="100">100 / page</option>
+          <option value="all">Show all</option>
+        </Select>
       </div>
 
       {loading && <LoadingState />}

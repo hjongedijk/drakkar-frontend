@@ -25,7 +25,7 @@ export function getDrakkarApiToken() {
 }
 
 export function getDocsUrl() {
-  return window.__DRAKKAR_CONFIG__?.DOCS_URL || "https://wiki.drakkar.botcontrol.nl/";
+  return window.__DRAKKAR_CONFIG__?.DOCS_URL || "/api/docs";
 }
 
 export function setDrakkarApiToken(token: string) {

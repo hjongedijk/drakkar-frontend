@@ -148,6 +148,13 @@ export type HealthChecksResponse = {
   };
   uncheckedCount: number;
   schedule: HealthCheckItem[];
+  recentResults: Array<{
+    id: string;
+    downloadId: string;
+    completedAt: string;
+    outcome: "healthy" | "repaired" | "deleted" | "unknown";
+    message: string;
+  }>;
 };
 
 export type DiscoverMediaItem = {
@@ -372,6 +379,11 @@ export type MediaRequest = {
     id: string;
     status: string;
   } | null;
+  monitorSummary?: {
+    availableCount: number;
+    missingCount: number;
+    downloadingCount: number;
+  } | null;
 };
 
 export type RequestSyncResult = {
@@ -479,6 +491,11 @@ export type VfsNode = {
   size: number;
   modifiedAt: string;
   status?: string;
+};
+
+export type VfsTextFile = {
+  path: string;
+  content: string;
 };
 
 export type VfsTreeNode = {
@@ -619,6 +636,37 @@ export type Settings = {
   plexLibraryPath: string;
   plexSectionId?: string;
   plexClientIdentifier: string;
+  subtitlesEnabled: boolean;
+  subtitlesProvider: "subdl" | "opensubtitlescom";
+  subtitlesApiKey?: string;
+  subtitlesUsername?: string;
+  subtitlesPassword?: string;
+  subtitleProviderOrder: Array<"subdl" | "opensubtitlescom">;
+  subtitleProviders: {
+    subdl: {
+      enabled: boolean;
+      apiKey?: string;
+    };
+    opensubtitlescom: {
+      enabled: boolean;
+      apiKey?: string;
+      username?: string;
+      password?: string;
+    };
+  };
+  subtitleLanguages: string[];
+  taskIntervals: Record<string, number | null>;
+};
+
+export type AdminUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  isAdmin: boolean;
+  mustChangePassword: boolean;
+  createdAt: string;
+  updatedAt: string;
+  group: "Admin" | "Standard";
 };
 
 export type PlexLibrary = {
@@ -856,6 +904,7 @@ export type MediaLibraryItem = {
   audio?: string | null;
   releaseGroup?: string | null;
   size?: number | null;
+  subtitleLanguages?: string[];
   lastStreamedAt?: string | null;
   streamCount: number;
   createdAt: string;
@@ -873,6 +922,14 @@ export const api = {
   deleteAuthToken,
   drakkarApiToken,
   rotateDrakkarApiToken,
+  adminUsers: () => apiRequest<{ users: AdminUser[] }>("/api/auth/admin/users"),
+  createAdminUser: (payload: { username: string; displayName?: string; password: string; isAdmin: boolean; mustChangePassword: boolean }) =>
+    apiRequest<{ user: AdminUser }>("/api/auth/admin/users", { method: "POST", body: JSON.stringify(payload) }),
+  updateAdminUser: (id: string, payload: { username?: string; displayName?: string; isAdmin?: boolean; mustChangePassword?: boolean }) =>
+    apiRequest<{ user: AdminUser }>(`/api/auth/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  resetAdminUserPassword: (id: string, newPassword: string) =>
+    apiRequest<{ ok: boolean }>(`/api/auth/admin/users/${id}/reset-password`, { method: "POST", body: JSON.stringify({ newPassword }) }),
+  deleteAdminUser: (id: string) => apiRequest<{ ok: boolean }>(`/api/auth/admin/users/${id}`, { method: "DELETE" }),
   status: getStatus,
   healthChecks: () => apiRequest<HealthChecksResponse>("/api/health/checks"),
   discoverHome: () => apiRequest<DiscoverHomeResponse>("/api/discover/home"),
@@ -978,6 +1035,7 @@ export const api = {
   logsDownloadUrl: () => downloadFileUrl("/api/logs/download"),
   vfsList: (path: string) => apiRequest<VfsNode[]>(`/api/vfs/list?path=${encodeURIComponent(path)}`),
   vfsTree: (path = "/", depth = 4) => apiRequest<VfsTreeNode>(`/api/vfs/tree?path=${encodeURIComponent(path)}&depth=${depth}`),
+  vfsText: (path: string) => apiRequest<VfsTextFile>(`/api/vfs/text?path=${encodeURIComponent(path)}`),
   streamSessions: () => apiRequest<StreamSession[]>("/api/vfs/streams"),
   streamMetrics: () => apiRequest<StreamMetrics>("/api/vfs/streams/metrics"),
   stopStream: (id: string) => apiRequest<{ ok: boolean }>(`/api/vfs/streams/${id}/stop`, { method: "POST" }),
@@ -986,6 +1044,11 @@ export const api = {
   tasks: () => apiRequest<{ tasks: ScheduledTask[] }>("/api/tasks"),
   runTask: (id: string) => apiRequest<{ task: ScheduledTask | null; skipped: boolean; accepted?: boolean; reason?: string; conflictingTaskId?: string }>(`/api/tasks/${id}/run`, { method: "POST", body: "{}" }),
   refreshVfs: () => apiRequest<{ ok: boolean }>("/api/vfs/refresh", { method: "POST" }),
+  createVfsFolder: (path: string) => apiRequest<VfsNode>("/api/vfs/folder", { method: "POST", body: JSON.stringify({ path }) }),
+  createVfsFile: (path: string, content = "") => apiRequest<VfsNode>("/api/vfs/file", { method: "POST", body: JSON.stringify({ path, content }) }),
+  updateVfsFile: (path: string, content: string) => apiRequest<VfsNode>("/api/vfs/file", { method: "PUT", body: JSON.stringify({ path, content }) }),
+  renameVfsPath: (path: string, nextPath: string) => apiRequest<VfsNode>("/api/vfs/rename", { method: "POST", body: JSON.stringify({ path, nextPath }) }),
+  deleteVfsPath: (path: string) => apiRequest<{ ok: boolean }>(`/api/vfs/path?path=${encodeURIComponent(path)}`, { method: "DELETE" }),
   imports: () => apiRequest<ImportItem[]>("/api/imports"),
   symlinks: () => apiRequest<SymlinkItem[]>("/api/symlinks"),
   repairSymlinks: () => apiRequest<{ repaired: number }>("/api/symlinks/repair", { method: "POST" }),

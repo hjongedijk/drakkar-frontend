@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, Circle, Server, UserPlus } from "lucide-react";
+import { CheckCircle2, Circle, ExternalLink, Server, UserPlus } from "lucide-react";
 import { api } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { Button } from "../components/ui/button";
@@ -44,6 +44,8 @@ export function SetupWizard() {
   const [requestProviderUrl, setRequestProviderUrl] = useState("");
   const [requestProviderApiKey, setRequestProviderApiKey] = useState("");
   const [requestProviderInterval, setRequestProviderInterval] = useState("15");
+  const [plexPin, setPlexPin] = useState<{ pinId: number; code: string; authUrl: string } | null>(null);
+  const [plexMessage, setPlexMessage] = useState<string | null>(null);
   const status = useQuery({ queryKey: ["setup-status"], queryFn: api.setupStatus });
 
   useEffect(() => {
@@ -116,6 +118,37 @@ export function SetupWizard() {
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not complete setup")
   });
+  const startPlexOauth = useMutation({
+    mutationFn: () => api.plexOauthStart(),
+    onSuccess: (result) => {
+      setPlexPin(result);
+      setPlexMessage(`Plex PIN ${result.code} opened in a new tab. Approve it and Drakkar will detect the token automatically.`);
+      window.open(result.authUrl, "_blank", "noopener,noreferrer");
+    },
+    onError: (error) => setPlexMessage(error instanceof Error ? error.message : "Could not start Plex OAuth")
+  });
+
+  useEffect(() => {
+    if (!plexPin) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const result = await api.plexOauthPoll(plexPin.pinId);
+        if (cancelled || !result.authorized || !result.token) return;
+        setPlexToken(result.token);
+        setPlexMessage("Plex token received.");
+        setPlexPin(null);
+      } catch {
+        // keep polling until approved or user leaves page
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => void poll(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [plexPin]);
 
   if (status.isLoading) return <LoadingState />;
   if (status.isError || !status.data) return <ErrorState message="Could not load setup status." />;
@@ -207,6 +240,18 @@ export function SetupWizard() {
           <Field label="Library path"><Input value={plexLibraryPath} onChange={(event) => setPlexLibraryPath(event.target.value)} /></Field>
           <Field label="Section ID"><Input value={plexSectionId} onChange={(event) => setPlexSectionId(event.target.value)} /></Field>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => startPlexOauth.mutate()} disabled={startPlexOauth.isPending}>
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Get token with Plex
+          </Button>
+          {plexPin ? (
+            <Button type="button" variant="outline" asChild>
+              <a href={plexPin.authUrl} target="_blank" rel="noreferrer">Open PIN {plexPin.code}</a>
+            </Button>
+          ) : null}
+        </div>
+        {plexMessage ? <p className="text-xs text-muted-foreground">{plexMessage}</p> : null}
       </Card>
 
       <Card className="space-y-3 p-4">

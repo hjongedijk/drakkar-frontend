@@ -316,6 +316,9 @@ export function Library() {
 function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): LibraryGroup[] {
   const groups = new Map<string, LibraryGroup>();
   const requestByKey = new Map<string, MediaRequest>();
+  const requestAliasByTitle = new Map<string, string>();
+  const requestLooseAliasByTitle = new Map<string, string>();
+  const requestLooseAliasCandidates = new Map<string, string[]>();
 
   for (const request of requests) {
     const key = groupKey({
@@ -327,6 +330,11 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
       imdbId: request.imdbId
     });
     requestByKey.set(key, request);
+    requestAliasByTitle.set(titleAliasKey(request), key);
+    if (request.mediaType === "tv") {
+      const looseAlias = looseTitleAliasKey(request);
+      requestLooseAliasCandidates.set(looseAlias, [...(requestLooseAliasCandidates.get(looseAlias) ?? []), key]);
+    }
     groups.set(key, {
       key,
       mediaType: request.mediaType as "movie" | "tv",
@@ -348,8 +356,16 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
     });
   }
 
+  for (const [alias, keys] of requestLooseAliasCandidates.entries()) {
+    if (keys.length === 1 && keys[0]) requestLooseAliasByTitle.set(alias, keys[0]);
+  }
+
   for (const item of dedupeLibraryItems(items)) {
-    const key = groupKey(item);
+    const exactKey = groupKey(item);
+    const aliasKey = itemHasExternalIds(item)
+      ? null
+      : requestAliasByTitle.get(titleAliasKey(item)) ?? (item.mediaType === "tv" ? requestLooseAliasByTitle.get(looseTitleAliasKey(item)) : null);
+    const key = aliasKey ?? exactKey;
     const request = requestByKey.get(key);
     const isImportedItem = item.sourceKey.startsWith("import:");
     const group: LibraryGroup = groups.get(key) ?? {
@@ -394,12 +410,18 @@ function buildGroups(items: MediaLibraryItem[], requests: MediaRequest[]): Libra
       group.missingCount = group.availableCount > 0 ? 0 : group.request ? 1 : 0;
       group.downloadingCount = group.availableCount > 0 ? 0 : requestIsQueued(group.request) ? 1 : 0;
     } else {
-      group.missingCount = Math.max(0, countRequestedEpisodes(group.request) - group.availableCount);
-      if (!requestIsQueued(group.request)) group.downloadingCount = 0;
+      if (group.request?.monitorSummary) {
+        group.availableCount = Math.max(group.availableCount, group.request.monitorSummary.availableCount);
+        group.missingCount = group.request.monitorSummary.missingCount;
+        group.downloadingCount = group.request.monitorSummary.downloadingCount;
+      } else {
+        group.missingCount = Math.max(0, countRequestedEpisodes(group.request) - group.availableCount);
+        if (!requestIsQueued(group.request)) group.downloadingCount = 0;
+      }
     }
   }
 
-  return [...groups.values()].sort((a, b) => {
+  return mergeGhostGroups([...groups.values()]).sort((a, b) => {
     const statusOrder = groupStatus(a).order - groupStatus(b).order;
     if (statusOrder !== 0) return statusOrder;
     const recent = Date.parse(b.recentAt) - Date.parse(a.recentAt);
@@ -436,6 +458,103 @@ function dedupeLibraryItems(items: MediaLibraryItem[]) {
   return [...best.values()];
 }
 
+function mergeGhostGroups(groups: LibraryGroup[]) {
+  const byTitle = new Map<string, LibraryGroup[]>();
+  for (const group of groups) {
+    const key = ghostMergeAliasKey(group);
+    byTitle.set(key, [...(byTitle.get(key) ?? []), group]);
+  }
+
+  const result: LibraryGroup[] = [];
+
+  for (const bucket of byTitle.values()) {
+    const canonical = [...bucket].sort((left, right) => groupIdentityScore(right) - groupIdentityScore(left))[0];
+    if (!canonical) continue;
+    const combined: LibraryGroup = {
+      ...canonical,
+      items: [...canonical.items],
+      availableItems: [...canonical.availableItems]
+    };
+
+    for (const candidate of bucket) {
+      if (candidate.key === canonical.key) continue;
+      if (!shouldMergeGhostGroup(canonical, candidate)) continue;
+      combined.items = dedupeGroupItems([...combined.items, ...candidate.items]);
+      combined.availableItems = dedupeGroupItems([...combined.availableItems, ...candidate.availableItems]).filter(
+        (item) => item.libraryStatus === "available"
+      );
+      combined.recentAt = maxIso(combined.recentAt, candidate.recentAt);
+      combined.posterUrl ??= candidate.posterUrl;
+      combined.backdropUrl ??= candidate.backdropUrl;
+      combined.overview ??= candidate.overview;
+    }
+
+    combined.availableCount = combined.availableItems.length;
+    combined.downloadingCount = combined.items.filter(
+      (item) =>
+        item.sourceKey.startsWith("import:") &&
+        (item.libraryStatus === "grabbed" || item.libraryStatus === "searching" || item.libraryStatus === "requested")
+    ).length;
+    result.push(combined);
+    for (const candidate of bucket) {
+      if (candidate.key === canonical.key) continue;
+      if (shouldMergeGhostGroup(canonical, candidate)) continue;
+      result.push(candidate);
+    }
+  }
+
+  return result;
+}
+
+function shouldMergeGhostGroup(canonical: LibraryGroup, candidate: LibraryGroup) {
+  if (canonical.mediaType !== candidate.mediaType) return false;
+  if (normalizeTitle(canonical.title) !== normalizeTitle(candidate.title)) return false;
+  if (canonical.year && candidate.year && canonical.year !== candidate.year) return false;
+  if (candidate.request) return false;
+  if (candidate.imdbId || candidate.tmdbId || candidate.tvdbId) return false;
+  return Boolean(canonical.request || canonical.imdbId || canonical.tmdbId || canonical.tvdbId);
+}
+
+function groupIdentityScore(group: LibraryGroup) {
+  return (
+    (group.request ? 1000 : 0) +
+    (group.imdbId ? 400 : 0) +
+    (group.tmdbId ? 300 : 0) +
+    (group.tvdbId ? 250 : 0) +
+    (group.year ? 40 : 0) +
+    (group.posterUrl ? 10 : 0) +
+    group.availableCount
+  );
+}
+
+function dedupeGroupItems(items: MediaLibraryItem[]) {
+  const best = new Map<string, MediaLibraryItem>();
+  for (const item of items) {
+    const key = itemEpisodeAlias(item);
+    const existing = best.get(key);
+    if (!existing || itemPreferenceScore(item) > itemPreferenceScore(existing)) {
+      best.set(key, item);
+    }
+  }
+  return [...best.values()];
+}
+
+function itemEpisodeAlias(item: MediaLibraryItem) {
+  if (item.mediaType === "tv" && item.season != null && item.episode != null) {
+    return `tv:${item.season}:${item.episode}`;
+  }
+  return item.filePath ?? item.symlinkPath ?? item.sourceKey;
+}
+
+function itemPreferenceScore(item: MediaLibraryItem) {
+  return (
+    (item.libraryStatus === "available" ? 100 : 0) +
+    (item.sourceKey.startsWith("import:") ? 20 : 0) +
+    (item.posterUrl ? 5 : 0) +
+    (item.year ? 1 : 0)
+  );
+}
+
 function countRequestedEpisodes(request?: MediaRequest) {
   if (!request || request.mediaType !== "tv") return 0;
   if (Array.isArray(request.episodes) && request.episodes.length > 0) return request.episodes.length;
@@ -464,6 +583,24 @@ function groupKey(input: { mediaType: string; title: string; year?: number | nul
   return `${input.mediaType}:${normalizeTitle(title)}:${input.year ?? ""}`;
 }
 
+function titleAliasKey(input: { mediaType: string; title: string; year?: number | null }) {
+  const title = input.mediaType === "tv" ? cleanSeriesTitle(input.title) : input.title;
+  return `${input.mediaType}:${normalizeTitle(title)}:${input.year ?? ""}`;
+}
+
+function looseTitleAliasKey(input: { mediaType: string; title: string }) {
+  const title = input.mediaType === "tv" ? cleanSeriesTitle(input.title) : input.title;
+  return `${input.mediaType}:${normalizeTitle(title)}`;
+}
+
+function ghostMergeAliasKey(input: { mediaType: string; title: string; year?: number | null }) {
+  return input.mediaType === "tv" ? looseTitleAliasKey(input) : titleAliasKey(input);
+}
+
+function itemHasExternalIds(item: { tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) {
+  return Boolean(item.imdbId || item.tmdbId || item.tvdbId);
+}
+
 function itemKey(item: MediaLibraryItem) {
   return `${groupKey(item)}:${item.season ?? ""}:${item.episode ?? ""}`;
 }
@@ -483,6 +620,7 @@ function Metric({ label, value }: { label: string; value: number | string }) {
 
 function PosterCard({ group, onOpen }: { group: LibraryGroup; onOpen: () => void }) {
   const status = groupStatus(group);
+  const subtitleLanguages = groupSubtitleLanguages(group);
   return (
     <button className="overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:border-primary" onClick={onOpen}>
       <div className="aspect-[2/3] bg-muted">
@@ -492,6 +630,7 @@ function PosterCard({ group, onOpen }: { group: LibraryGroup; onOpen: () => void
       <div className="space-y-1 p-2.5">
         <p className="truncate text-xs font-semibold sm:text-sm">{group.title}</p>
         <p className="text-[11px] text-muted-foreground">{group.mediaType === "tv" ? `${group.availableCount} available · ${group.missingCount} missing` : movieSummary(group)}</p>
+        {subtitleLanguages.length > 0 ? <p className="text-[11px] text-cyan-200">Subs: {subtitleLanguages.join(", ")}</p> : null}
         <Badge>{status.label}</Badge>
       </div>
     </button>
@@ -539,6 +678,7 @@ function LibraryDetails({
     return [...bySeason.entries()].sort(([a], [b]) => a - b);
   }, [group.items]);
   const primaryAvailable = group.availableItems[0];
+  const subtitleLanguages = groupSubtitleLanguages(group);
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -559,6 +699,7 @@ function LibraryDetails({
                     <Badge>{groupStatus(group).label}</Badge>
                     <Badge>{group.availableCount} available</Badge>
                     {group.missingCount > 0 ? <Badge>{group.missingCount} missing</Badge> : null}
+                    {subtitleLanguages.length > 0 ? <Badge>Subs {subtitleLanguages.join(", ")}</Badge> : null}
                   </div>
                 </div>
                 <Button variant="outline" onClick={onClose}>Close</Button>
@@ -756,6 +897,11 @@ function InfoBox({ label, value }: { label: string; value: string }) {
       <div className="mt-1 text-lg font-semibold">{value}</div>
     </div>
   );
+}
+
+function groupSubtitleLanguages(group: LibraryGroup) {
+  const values = group.availableItems.flatMap((item) => item.subtitleLanguages ?? []);
+  return [...new Set(values)].sort();
 }
 
 function ReplacementPanel({

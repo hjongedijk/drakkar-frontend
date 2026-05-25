@@ -105,6 +105,7 @@ export function DetailsPage() {
   if (!title && richDetails.isLoading) return <LoadingState />;
   if (!details) return <EmptyState message="No media details found." />;
   const rich = richDetails.data;
+  const subtitleLanguages = [...new Set(details.availableItems.flatMap((item) => item.subtitleLanguages ?? []))].sort();
 
   return (
     <div className="space-y-8">
@@ -123,6 +124,7 @@ export function DetailsPage() {
                 {rich?.originalLanguage ? <Badge>{rich.originalLanguage.toUpperCase()}</Badge> : null}
                 {details.request ? <Badge>{details.request.status}</Badge> : <Badge>not requested</Badge>}
                 {details.availableItems.length > 0 ? <Badge>{details.availableItems.length} available</Badge> : null}
+                {subtitleLanguages.length > 0 ? <Badge>Subs {subtitleLanguages.join(", ")}</Badge> : null}
               </div>
               <h1 className="max-w-4xl text-4xl font-black tracking-tight md:text-6xl">{details.title}</h1>
               {rich?.tagline ? <p className="text-lg font-semibold text-white/80">{rich.tagline}</p> : null}
