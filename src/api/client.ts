@@ -1,4 +1,4 @@
-import { apiUrl, getDrakkarApiToken } from "../config";
+import { apiUrl } from "../config";
 
 const API_REQUEST_TIMEOUT_MS = 30000;
 
@@ -16,7 +16,6 @@ export class ApiError extends Error {
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body != null && !headers.has("content-type")) headers.set("content-type", "application/json");
-  headers.set("x-api-token", getDrakkarApiToken());
   const response = await fetchWithTimeout(apiUrl(path), {
     ...init,
     credentials: "include",
@@ -42,7 +41,6 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 export async function downloadBlob(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (init.body != null && !headers.has("content-type")) headers.set("content-type", "application/json");
-  headers.set("x-api-token", getDrakkarApiToken());
   const response = await fetchWithTimeout(apiUrl(path), {
     ...init,
     credentials: "include",

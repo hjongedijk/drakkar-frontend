@@ -15,6 +15,10 @@ export const APP_NAME = "Drakkar";
 export const APP_VERSION = DRAKKAR_VERSION;
 const DRAKKAR_API_TOKEN_OVERRIDE_KEY = "drakkar.apiTokenOverride";
 
+export function hasDrakkarApiTokenOverride() {
+  return Boolean(window.localStorage.getItem(DRAKKAR_API_TOKEN_OVERRIDE_KEY));
+}
+
 export function getApiBaseUrl() {
   return window.__DRAKKAR_CONFIG__?.API_BASE_URL ?? "";
 }
@@ -50,7 +54,7 @@ export function apiUrl(path: string) {
 }
 
 export function apiAssetUrl(path: string) {
-  const token = getDrakkarApiToken();
+  const token = hasDrakkarApiTokenOverride() ? getDrakkarApiToken() : "";
   if (!token) return apiUrl(path);
   return `${apiUrl(path)}${path.includes("?") ? "&" : "?"}apiToken=${encodeURIComponent(token)}`;
 }
