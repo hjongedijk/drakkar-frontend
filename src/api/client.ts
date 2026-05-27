@@ -383,7 +383,31 @@ export type MediaRequest = {
     availableCount: number;
     missingCount: number;
     downloadingCount: number;
+    hasMissingEpisodes?: boolean;
+    hasAvailableEpisodes?: boolean;
   } | null;
+};
+
+async function fetchAllRequestSummaries(limit = 500) {
+  const first = await apiRequest<MediaRequestPage>(`/api/requests?summary=1&page=1&limit=${limit}`);
+  if (first.totalPages <= 1) return first;
+  const remaining = await Promise.all(
+    Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
+      apiRequest<MediaRequestPage>(`/api/requests?summary=1&page=${index + 2}&limit=${limit}`)
+    )
+  );
+  return {
+    ...first,
+    items: [first.items, ...remaining.map((page) => page.items)].flat()
+  };
+}
+
+export type MediaRequestPage = {
+  items: MediaRequest[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 };
 
 export type RequestSyncResult = {
@@ -425,7 +449,7 @@ export type RequestMonitorSeason = {
     monitored: boolean;
     available: boolean;
     downloading: boolean;
-    status: "available" | "downloading" | "missing_monitored" | "missing_unmonitored";
+    status: "available" | "downloading" | "missing_monitored";
   }>;
 };
 
@@ -944,7 +968,7 @@ export const api = {
     if (item.imdbId) params.set("imdbId", item.imdbId);
     return apiRequest<MediaDetails>(`/api/discover/details/${item.mediaType}?${params.toString()}`);
   },
-  releaseCalendar: (month?: string) => apiRequest<ReleaseCalendarResponse>(`/api/release-calendar${month ? `?month=${encodeURIComponent(month)}` : ""}`),
+  releaseCalendar: (month?: string) => apiRequest<ReleaseCalendarResponse>(`/api/release-calendar?compact=1${month ? `&month=${encodeURIComponent(month)}` : ""}`),
   settings: () => apiRequest<Settings>("/api/settings"),
   updateSettings: (settings: Settings) => apiRequest<Settings>("/api/settings", { method: "PUT", body: JSON.stringify(settings) }),
   setupStatus: () => apiRequest<SetupStatus>("/api/setup/status"),
@@ -992,6 +1016,8 @@ export const api = {
       body: JSON.stringify({ profileId, release })
     }),
   requests: () => apiRequest<MediaRequest[]>("/api/requests"),
+  requestsSummary: () => fetchAllRequestSummaries(),
+  requestsPage: (page = 1, limit = 50) => apiRequest<MediaRequestPage>(`/api/requests?summary=1&page=${page}&limit=${limit}`),
   createRequest: (item: { mediaType: "movie" | "tv"; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) =>
     apiRequest<{ request: MediaRequest; seerr: { ok: boolean; status: number; body?: unknown } | null }>("/api/requests", { method: "POST", body: JSON.stringify(item) }),
   requestMonitor: (id: string) => apiRequest<RequestMonitor>(`/api/requests/${id}/monitor`),

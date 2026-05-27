@@ -309,7 +309,7 @@ export function VfsBrowser() {
         {metrics.data ? (
           <div className="grid gap-3 border-t p-3 text-sm md:grid-cols-4">
             <p className="text-muted-foreground">Served {formatBytes(metrics.data.bytesServed)}</p>
-            <p className="text-muted-foreground">Cache {metrics.data.memoryCacheHits + metrics.data.cacheHits} hits / {metrics.data.cacheMisses} misses</p>
+            <p className="text-muted-foreground">Cache {metrics.data.cacheHits} hits / {metrics.data.cacheMisses} misses</p>
             <p className="text-muted-foreground">Read-ahead {formatBytes(metrics.data.readAheadBytes)}</p>
             <p className="text-muted-foreground">Deduped {metrics.data.dedupedSegmentFetches} fetches</p>
           </div>

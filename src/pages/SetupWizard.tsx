@@ -1,13 +1,14 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckCircle2, Circle, ExternalLink, Server, UserPlus } from "lucide-react";
-import { api } from "../api/client";
+import { useMachine } from "@xstate/react";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { useToast } from "../components/ToastProvider";
+import { setupWizardMachine } from "../machines/setupWizardMachine";
 
 const steps = [
   ["nzbhydra", "NZBHydra2"],
@@ -21,137 +22,36 @@ export function SetupWizard() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { notify } = useToast();
-  const [username, setUsername] = useState("admin");
-  const [displayName, setDisplayName] = useState("Admin");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [nzbhydraUrl, setNzbhydraUrl] = useState("");
-  const [nzbhydraApiKey, setNzbhydraApiKey] = useState("");
-  const [tmdbApiKey, setTmdbApiKey] = useState("");
-  const [tvdbApiKey, setTvdbApiKey] = useState("");
-  const [plexServerUrl, setPlexServerUrl] = useState("");
-  const [plexToken, setPlexToken] = useState("");
-  const [plexLibraryPath, setPlexLibraryPath] = useState("/mnt/media");
-  const [plexSectionId, setPlexSectionId] = useState("");
-  const [usenetName, setUsenetName] = useState("Primary");
-  const [usenetHost, setUsenetHost] = useState("");
-  const [usenetPort, setUsenetPort] = useState("563");
-  const [usenetSsl, setUsenetSsl] = useState(true);
-  const [usenetUsername, setUsenetUsername] = useState("");
-  const [usenetPassword, setUsenetPassword] = useState("");
-  const [usenetConnections, setUsenetConnections] = useState("24");
-  const [requestProviderName, setRequestProviderName] = useState("Seerr");
-  const [requestProviderUrl, setRequestProviderUrl] = useState("");
-  const [requestProviderApiKey, setRequestProviderApiKey] = useState("");
-  const [requestProviderInterval, setRequestProviderInterval] = useState("15");
-  const [plexPin, setPlexPin] = useState<{ pinId: number; code: string; authUrl: string } | null>(null);
-  const [plexMessage, setPlexMessage] = useState<string | null>(null);
-  const status = useQuery({ queryKey: ["setup-status"], queryFn: api.setupStatus });
+  const [state, send] = useMachine(setupWizardMachine);
+  const { form, plexPin, status, message, error, saveSucceededAt } = state.context;
+  const lastOpenedPlexPinId = useRef<number | null>(null);
+  const lastSavedAt = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!status.data) return;
-    setNzbhydraUrl((current) => current || status.data!.prefill.nzbhydraUrl);
-    setNzbhydraApiKey((current) => current || status.data!.prefill.nzbhydraApiKey);
-    setTmdbApiKey((current) => current || status.data!.prefill.tmdbApiKey);
-    setTvdbApiKey((current) => current || status.data!.prefill.tvdbApiKey);
-    setPlexServerUrl((current) => current || status.data!.prefill.plexServerUrl);
-    setPlexToken((current) => current || status.data!.prefill.plexToken);
-    setPlexLibraryPath((current) => current || status.data!.prefill.plexLibraryPath || "/mnt/media");
-    setPlexSectionId((current) => current || status.data!.prefill.plexSectionId);
-    setUsenetName((current) => current || status.data!.prefill.usenet?.name || "Primary");
-    setUsenetHost((current) => current || status.data!.prefill.usenet?.host || "");
-    setUsenetPort((current) => current || String(status.data!.prefill.usenet?.port ?? 563));
-    setUsenetSsl(status.data.prefill.usenet?.ssl ?? true);
-    setUsenetUsername((current) => current || status.data!.prefill.usenet?.username || "");
-    setUsenetPassword((current) => current || status.data!.prefill.usenet?.password || "");
-    setUsenetConnections((current) => current || String(status.data!.prefill.usenet?.connections ?? 24));
-    setRequestProviderName((current) => current || status.data!.prefill.requestProvider?.name || "Seerr");
-    setRequestProviderUrl((current) => current || status.data!.prefill.requestProvider?.baseUrl || "");
-    setRequestProviderApiKey((current) => current || status.data!.prefill.requestProvider?.apiKey || "");
-    setRequestProviderInterval((current) => current || String(status.data!.prefill.requestProvider?.syncIntervalMinutes ?? 15));
-  }, [status.data]);
-
-  const complete = useMutation({
-    mutationFn: () => {
-      if (status.data?.adminRequired && password !== confirmPassword) throw new Error("passwords do not match");
-      return api.completeSetup({
-        ...(status.data?.adminRequired ? { admin: { username, displayName, password } } : {}),
-        settings: {
-          nzbhydraUrl,
-          nzbhydraApiKey,
-          tmdbApiKey,
-          tvdbApiKey,
-          plexServerUrl,
-          plexToken,
-          plexLibraryPath,
-          plexSectionId
-        },
-        ...(usenetHost ? {
-          usenet: {
-            name: usenetName,
-            host: usenetHost,
-            port: Number(usenetPort || 563),
-            ssl: usenetSsl,
-            username: usenetUsername,
-            password: usenetPassword,
-            connections: Number(usenetConnections || 24),
-            priority: 0,
-            enabled: true,
-            isBackup: false
-          }
-        } : {}),
-        ...(requestProviderUrl && requestProviderApiKey ? {
-          requestProvider: {
-            name: requestProviderName,
-            baseUrl: requestProviderUrl,
-            apiKey: requestProviderApiKey,
-            enabled: true,
-            syncIntervalMinutes: Number(requestProviderInterval || 15)
-          }
-        } : {})
-      });
-    },
-    onSuccess: () => {
-      notify("Setup saved. Log in with admin user.");
-      queryClient.invalidateQueries({ queryKey: ["setup-status"] });
-      navigate("/login", { replace: true });
-    },
-    onError: (error) => notify(error instanceof Error ? error.message : "Could not complete setup")
-  });
-  const startPlexOauth = useMutation({
-    mutationFn: () => api.plexOauthStart(),
-    onSuccess: (result) => {
-      setPlexPin(result);
-      setPlexMessage(`Plex PIN ${result.code} opened in a new tab. Approve it and Drakkar will detect the token automatically.`);
-      window.open(result.authUrl, "_blank", "noopener,noreferrer");
-    },
-    onError: (error) => setPlexMessage(error instanceof Error ? error.message : "Could not start Plex OAuth")
-  });
-
-  useEffect(() => {
-    if (!plexPin) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const result = await api.plexOauthPoll(plexPin.pinId);
-        if (cancelled || !result.authorized || !result.token) return;
-        setPlexToken(result.token);
-        setPlexMessage("Plex token received.");
-        setPlexPin(null);
-      } catch {
-        // keep polling until approved or user leaves page
-      }
-    };
-    void poll();
-    const interval = window.setInterval(() => void poll(), 3000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
+    if (!plexPin || lastOpenedPlexPinId.current === plexPin.pinId) return;
+    lastOpenedPlexPinId.current = plexPin.pinId;
+    window.open(plexPin.authUrl, "_blank", "noopener,noreferrer");
   }, [plexPin]);
 
-  if (status.isLoading) return <LoadingState />;
-  if (status.isError || !status.data) return <ErrorState message="Could not load setup status." />;
+  useEffect(() => {
+    if (!saveSucceededAt || lastSavedAt.current === saveSucceededAt) return;
+    lastSavedAt.current = saveSucceededAt;
+    notify("Setup saved. Log in with admin user.");
+    void queryClient.invalidateQueries({ queryKey: ["setup-status"] });
+    navigate("/login", { replace: true });
+  }, [navigate, notify, queryClient, saveSucceededAt]);
+
+  useEffect(() => {
+    if (!message && !error) return;
+    notify(error ?? message ?? "", error ? "error" : "success");
+    send({ type: "dismissMessage" });
+  }, [error, message, notify, send]);
+
+  if (state.matches("loading")) return <LoadingState />;
+  if (state.matches("loadFailed") || !status) return <ErrorState message={error ?? "Could not load setup status."} />;
+
+  const saving = state.matches({ ready: { submit: "saving" } });
+  const plexBusy = state.matches({ ready: { plex: "starting" } }) || state.matches({ ready: { plex: "polling" } }) || state.matches({ ready: { plex: "waiting" } }) || state.matches({ ready: { plex: "checking" } });
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -178,14 +78,14 @@ export function SetupWizard() {
         </div>
       </Card>
 
-      {status.data.adminRequired ? (
+      {status.adminRequired ? (
         <Card className="space-y-4 p-4">
           <h2 className="font-semibold">Main admin user</h2>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Username"><Input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" /></Field>
-            <Field label="Display name"><Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></Field>
-            <Field label="Password"><Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" /></Field>
-            <Field label="Confirm password"><Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" /></Field>
+            <Field label="Username"><Input value={form.username} onChange={(event) => send({ type: "updateField", field: "username", value: event.target.value })} autoComplete="username" /></Field>
+            <Field label="Display name"><Input value={form.displayName} onChange={(event) => send({ type: "updateField", field: "displayName", value: event.target.value })} /></Field>
+            <Field label="Password"><Input type="password" value={form.password} onChange={(event) => send({ type: "updateField", field: "password", value: event.target.value })} autoComplete="new-password" /></Field>
+            <Field label="Confirm password"><Input type="password" value={form.confirmPassword} onChange={(event) => send({ type: "updateField", field: "confirmPassword", value: event.target.value })} autoComplete="new-password" /></Field>
           </div>
         </Card>
       ) : null}
@@ -193,23 +93,23 @@ export function SetupWizard() {
       <Card className="space-y-4 p-4">
         <h2 className="font-semibold">NZBHydra2</h2>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="URL"><Input value={nzbhydraUrl} onChange={(event) => setNzbhydraUrl(event.target.value)} placeholder="http://nzbhydra2:5076" /></Field>
-          <Field label="API key"><Input value={nzbhydraApiKey} onChange={(event) => setNzbhydraApiKey(event.target.value)} /></Field>
+          <Field label="URL"><Input value={form.nzbhydraUrl} onChange={(event) => send({ type: "updateField", field: "nzbhydraUrl", value: event.target.value })} placeholder="http://nzbhydra2:5076" /></Field>
+          <Field label="API key"><Input value={form.nzbhydraApiKey} onChange={(event) => send({ type: "updateField", field: "nzbhydraApiKey", value: event.target.value })} /></Field>
         </div>
       </Card>
 
       <Card className="space-y-4 p-4">
         <h2 className="font-semibold">Usenet provider</h2>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Name"><Input value={usenetName} onChange={(event) => setUsenetName(event.target.value)} /></Field>
-          <Field label="Host"><Input value={usenetHost} onChange={(event) => setUsenetHost(event.target.value)} placeholder="news.example.com" /></Field>
-          <Field label="Port"><Input value={usenetPort} onChange={(event) => setUsenetPort(event.target.value)} inputMode="numeric" /></Field>
-          <Field label="Connections"><Input value={usenetConnections} onChange={(event) => setUsenetConnections(event.target.value)} inputMode="numeric" /></Field>
-          <Field label="Username"><Input value={usenetUsername} onChange={(event) => setUsenetUsername(event.target.value)} /></Field>
-          <Field label="Password"><Input type="password" value={usenetPassword} onChange={(event) => setUsenetPassword(event.target.value)} /></Field>
+          <Field label="Name"><Input value={form.usenetName} onChange={(event) => send({ type: "updateField", field: "usenetName", value: event.target.value })} /></Field>
+          <Field label="Host"><Input value={form.usenetHost} onChange={(event) => send({ type: "updateField", field: "usenetHost", value: event.target.value })} placeholder="news.example.com" /></Field>
+          <Field label="Port"><Input value={form.usenetPort} onChange={(event) => send({ type: "updateField", field: "usenetPort", value: event.target.value })} inputMode="numeric" /></Field>
+          <Field label="Connections"><Input value={form.usenetConnections} onChange={(event) => send({ type: "updateField", field: "usenetConnections", value: event.target.value })} inputMode="numeric" /></Field>
+          <Field label="Username"><Input value={form.usenetUsername} onChange={(event) => send({ type: "updateField", field: "usenetUsername", value: event.target.value })} /></Field>
+          <Field label="Password"><Input type="password" value={form.usenetPassword} onChange={(event) => send({ type: "updateField", field: "usenetPassword", value: event.target.value })} /></Field>
         </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input type="checkbox" checked={usenetSsl} onChange={(event) => setUsenetSsl(event.target.checked)} />
+          <input type="checkbox" checked={form.usenetSsl} onChange={(event) => send({ type: "updateField", field: "usenetSsl", value: event.target.checked })} />
           SSL enabled
         </label>
       </Card>
@@ -217,31 +117,31 @@ export function SetupWizard() {
       <Card className="space-y-4 p-4">
         <h2 className="font-semibold">Seerr</h2>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Name"><Input value={requestProviderName} onChange={(event) => setRequestProviderName(event.target.value)} /></Field>
-          <Field label="Base URL"><Input value={requestProviderUrl} onChange={(event) => setRequestProviderUrl(event.target.value)} placeholder="http://seerr:5055" /></Field>
-          <Field label="API key"><Input value={requestProviderApiKey} onChange={(event) => setRequestProviderApiKey(event.target.value)} /></Field>
-          <Field label="Sync minutes"><Input value={requestProviderInterval} onChange={(event) => setRequestProviderInterval(event.target.value)} inputMode="numeric" /></Field>
+          <Field label="Name"><Input value={form.requestProviderName} onChange={(event) => send({ type: "updateField", field: "requestProviderName", value: event.target.value })} /></Field>
+          <Field label="Base URL"><Input value={form.requestProviderUrl} onChange={(event) => send({ type: "updateField", field: "requestProviderUrl", value: event.target.value })} placeholder="http://seerr:5055" /></Field>
+          <Field label="API key"><Input value={form.requestProviderApiKey} onChange={(event) => send({ type: "updateField", field: "requestProviderApiKey", value: event.target.value })} /></Field>
+          <Field label="Sync minutes"><Input value={form.requestProviderInterval} onChange={(event) => send({ type: "updateField", field: "requestProviderInterval", value: event.target.value })} inputMode="numeric" /></Field>
         </div>
       </Card>
 
       <Card className="space-y-4 p-4">
         <h2 className="font-semibold">Metadata</h2>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="TMDB API key"><Input value={tmdbApiKey} onChange={(event) => setTmdbApiKey(event.target.value)} /></Field>
-          <Field label="TVDB API key"><Input value={tvdbApiKey} onChange={(event) => setTvdbApiKey(event.target.value)} /></Field>
+          <Field label="TMDB API key"><Input value={form.tmdbApiKey} onChange={(event) => send({ type: "updateField", field: "tmdbApiKey", value: event.target.value })} /></Field>
+          <Field label="TVDB API key"><Input value={form.tvdbApiKey} onChange={(event) => send({ type: "updateField", field: "tvdbApiKey", value: event.target.value })} /></Field>
         </div>
       </Card>
 
       <Card className="space-y-4 p-4">
         <h2 className="font-semibold">Plex</h2>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Server URL"><Input value={plexServerUrl} onChange={(event) => setPlexServerUrl(event.target.value)} placeholder="http://plex:32400" /></Field>
-          <Field label="Token"><Input value={plexToken} onChange={(event) => setPlexToken(event.target.value)} /></Field>
-          <Field label="Library path"><Input value={plexLibraryPath} onChange={(event) => setPlexLibraryPath(event.target.value)} /></Field>
-          <Field label="Section ID"><Input value={plexSectionId} onChange={(event) => setPlexSectionId(event.target.value)} /></Field>
+          <Field label="Server URL"><Input value={form.plexServerUrl} onChange={(event) => send({ type: "updateField", field: "plexServerUrl", value: event.target.value })} placeholder="http://plex:32400" /></Field>
+          <Field label="Token"><Input value={form.plexToken} onChange={(event) => send({ type: "updateField", field: "plexToken", value: event.target.value })} /></Field>
+          <Field label="Library path"><Input value={form.plexLibraryPath} onChange={(event) => send({ type: "updateField", field: "plexLibraryPath", value: event.target.value })} /></Field>
+          <Field label="Section ID"><Input value={form.plexSectionId} onChange={(event) => send({ type: "updateField", field: "plexSectionId", value: event.target.value })} /></Field>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => startPlexOauth.mutate()} disabled={startPlexOauth.isPending}>
+          <Button type="button" variant="outline" onClick={() => send({ type: "startPlexOauth" })} disabled={plexBusy}>
             <ExternalLink className="mr-2 h-4 w-4" />
             Get token with Plex
           </Button>
@@ -251,12 +151,12 @@ export function SetupWizard() {
             </Button>
           ) : null}
         </div>
-        {plexMessage ? <p className="text-xs text-muted-foreground">{plexMessage}</p> : null}
+        {plexPin ? <p className="text-xs text-muted-foreground">Waiting for Plex approval. Drakkar polls automatically.</p> : null}
       </Card>
 
       <Card className="space-y-3 p-4">
         {steps.map(([key, title]) => {
-          const ok = status.data.checks[key];
+          const ok = status.checks[key];
           return (
             <div key={key} className="flex items-center justify-between gap-3 rounded-xl border p-3">
               <div className="flex items-center gap-3">
@@ -270,9 +170,9 @@ export function SetupWizard() {
       </Card>
 
       <div className="flex flex-wrap gap-2">
-        {!status.data.adminRequired ? <Button asChild><Link to="/login">Go to login</Link></Button> : null}
-        <Button variant="outline" onClick={() => complete.mutate()} disabled={complete.isPending || status.data.completed}>
-          {status.data.completed ? "Setup complete" : "Save setup"}
+        {!status.adminRequired ? <Button asChild><Link to="/login">Go to login</Link></Button> : null}
+        <Button variant="outline" onClick={() => send({ type: "save" })} disabled={saving || status.completed}>
+          {status.completed ? "Setup complete" : saving ? "Saving..." : "Save setup"}
         </Button>
       </div>
     </div>

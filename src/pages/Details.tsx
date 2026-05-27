@@ -48,7 +48,7 @@ export function DetailsPage() {
   const overview = params.get("overview");
 
   const library = useQuery({ queryKey: ["library"], queryFn: api.library, refetchInterval: 120000 });
-  const requests = useQuery({ queryKey: ["requests"], queryFn: api.requests, refetchInterval: 60000 });
+  const requests = useQuery({ queryKey: ["requests", "summary"], queryFn: () => api.requestsSummary().then((result) => result.items), refetchInterval: 60000 });
   const richDetails = useQuery({
     queryKey: ["discover-details", mediaType, title, year, tmdbId, tvdbId, imdbId],
     queryFn: () => api.discoverDetails({ mediaType, title, year, tmdbId, tvdbId, imdbId }),
@@ -286,18 +286,16 @@ function formatMoney(value?: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
 }
 
-function episodeStatusLabel(status: "available" | "downloading" | "missing_monitored" | "missing_unmonitored") {
+function episodeStatusLabel(status: "available" | "downloading" | "missing_monitored") {
   if (status === "available") return "Available";
   if (status === "downloading") return "Downloading";
-  if (status === "missing_monitored") return "Missing";
-  return "Not Monitored";
+  return "Missing";
 }
 
-function episodeStatusClass(status: "available" | "downloading" | "missing_monitored" | "missing_unmonitored") {
+function episodeStatusClass(status: "available" | "downloading" | "missing_monitored") {
   if (status === "available") return "bg-[#22c55e]/20 text-[#b2f5c2]";
   if (status === "downloading") return "bg-[#8b5cf6]/20 text-[#d5c2ff]";
-  if (status === "missing_monitored") return "bg-[#ff5b5b]/20 text-[#ffc2c2]";
-  return "bg-[#ffab24]/20 text-[#ffd79a]";
+  return "bg-[#ff5b5b]/20 text-[#ffc2c2]";
 }
 
 function InfoBox({ label, value }: { label: string; value: string }) {

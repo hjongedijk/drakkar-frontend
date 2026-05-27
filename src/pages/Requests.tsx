@@ -13,9 +13,10 @@ export function Requests() {
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const [filter, setFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<RequestReleaseCandidate[]>([]);
-  const requests = useQuery({ queryKey: ["requests"], queryFn: api.requests, refetchInterval: 15000 });
+  const requests = useQuery({ queryKey: ["requests", page], queryFn: () => api.requestsPage(page, 50), refetchInterval: 15000 });
   const sync = useRefreshMutation(() => api.syncRequests(), [["requests"]], { success: "Requests synced." });
   const fullSyncRefresh = useRefreshMutation(() => api.fullSyncRefresh(), [["requests"], ["library"], ["downloads", "queue"]], {
     success: "Full request resync queued."
@@ -45,7 +46,7 @@ export function Requests() {
   if (requests.isLoading) return <LoadingState />;
   if (requests.isError) return <ErrorState message="Could not load requests." />;
 
-  const rows = (requests.data ?? []).filter((request) => filter === "all" || request.status === filter);
+  const rows = (requests.data?.items ?? []).filter((request) => filter === "all" || request.status === filter);
 
   return (
     <div className="space-y-5">
@@ -87,6 +88,15 @@ export function Requests() {
       </div>
 
       {rows.length === 0 ? <EmptyState message="No requests match the current filter." /> : <RequestTable rows={rows} onApprove={(id) => { notify("Approving request...", "info"); approve.mutate(id); }} onReject={(id) => { notify("Rejecting request...", "info"); reject.mutate(id); }} onSearch={(id) => { notify("Searching releases...", "info"); search.mutate(id); }} onGrab={(id) => { notify("Queueing best release...", "info"); grab.mutate(id); }} />}
+      {requests.data ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
+          <span className="text-muted-foreground">Page {requests.data.page} / {requests.data.totalPages} · {requests.data.total} requests</span>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={requests.data.page <= 1}>Prev</Button>
+            <Button variant="outline" onClick={() => setPage((value) => Math.min(requests.data.totalPages, value + 1))} disabled={requests.data.page >= requests.data.totalPages}>Next</Button>
+          </div>
+        </div>
+      ) : null}
       {activeRequestId && (
         <CandidatePanel
           title={rows.find((request) => request.id === activeRequestId)?.title ?? "Search results"}

@@ -1,24 +1,29 @@
-import type { ReactNode } from "react";
+import { Suspense, lazy, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { AppLayout } from "../components/AppLayout";
-import { Dashboard } from "../pages/Dashboard";
-import { DetailsPage } from "../pages/Details";
-import { DiscoverPage } from "../pages/Discover";
-import { DiscoverSearchPage } from "../pages/DiscoverSearch";
-import { Downloads } from "../pages/Downloads";
-import { HealthPage } from "../pages/Health";
-import { Library } from "../pages/Library";
-import { ReleaseCalendarPage } from "../pages/ReleaseCalendar";
-import { SearchPage } from "../pages/Search";
-import { ServicesPage } from "../pages/Services";
-import { Settings } from "../pages/Settings";
-import { SetupWizard } from "../pages/SetupWizard";
-import { VfsBrowser } from "../pages/VfsBrowser";
-import { LoginPage } from "../pages/Login";
 import { LoadingState } from "../components/PageState";
+
+const Dashboard = lazy(() => import("../pages/Dashboard").then((module) => ({ default: module.Dashboard })));
+const DetailsPage = lazy(() => import("../pages/Details").then((module) => ({ default: module.DetailsPage })));
+const DiscoverPage = lazy(() => import("../pages/Discover").then((module) => ({ default: module.DiscoverPage })));
+const DiscoverSearchPage = lazy(() => import("../pages/DiscoverSearch").then((module) => ({ default: module.DiscoverSearchPage })));
+const Downloads = lazy(() => import("../pages/Downloads").then((module) => ({ default: module.Downloads })));
+const HealthPage = lazy(() => import("../pages/Health").then((module) => ({ default: module.HealthPage })));
+const Library = lazy(() => import("../pages/Library").then((module) => ({ default: module.Library })));
+const ReleaseCalendarPage = lazy(() => import("../pages/ReleaseCalendar").then((module) => ({ default: module.ReleaseCalendarPage })));
+const SearchPage = lazy(() => import("../pages/Search").then((module) => ({ default: module.SearchPage })));
+const ServicesPage = lazy(() => import("../pages/Services").then((module) => ({ default: module.ServicesPage })));
+const Settings = lazy(() => import("../pages/Settings").then((module) => ({ default: module.Settings })));
+const SetupWizard = lazy(() => import("../pages/SetupWizard").then((module) => ({ default: module.SetupWizard })));
+const VfsBrowser = lazy(() => import("../pages/VfsBrowser").then((module) => ({ default: module.VfsBrowser })));
+const LoginPage = lazy(() => import("../pages/Login").then((module) => ({ default: module.LoginPage })));
+
+function lazyElement(node: ReactNode) {
+  return <Suspense fallback={<LoadingState />}>{node}</Suspense>;
+}
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -53,7 +58,7 @@ export const router = createBrowserRouter([
     path: "/setup",
     element: (
       <RedirectIfSetupComplete>
-        <SetupWizard />
+        {lazyElement(<SetupWizard />)}
       </RedirectIfSetupComplete>
     )
   },
@@ -62,7 +67,7 @@ export const router = createBrowserRouter([
     element: (
       <RequireSetup>
         <RedirectIfAuthenticated>
-          <LoginPage />
+          {lazyElement(<LoginPage />)}
         </RedirectIfAuthenticated>
       </RequireSetup>
     )
@@ -78,22 +83,22 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: "dashboard", element: <Dashboard /> },
-      { path: "discover/search", element: <DiscoverSearchPage /> },
-      { path: "discover/:mediaType", element: <DiscoverPage /> },
-      { path: "details/:mediaType/:idSlug", element: <DetailsPage /> },
-      { path: "details", element: <DetailsPage /> },
+      { path: "dashboard", element: lazyElement(<Dashboard />) },
+      { path: "discover/search", element: lazyElement(<DiscoverSearchPage />) },
+      { path: "discover/:mediaType", element: lazyElement(<DiscoverPage />) },
+      { path: "details/:mediaType/:idSlug", element: lazyElement(<DetailsPage />) },
+      { path: "details", element: lazyElement(<DetailsPage />) },
       { path: "requests", element: <Navigate to="/library" replace /> },
-      { path: "search", element: <SearchPage /> },
-      { path: "calendar", element: <ReleaseCalendarPage /> },
-      { path: "downloads", element: <Downloads /> },
-      { path: "health", element: <HealthPage /> },
-      { path: "library", element: <Library /> },
-      { path: "vfs", element: <VfsBrowser /> },
+      { path: "search", element: lazyElement(<SearchPage />) },
+      { path: "calendar", element: lazyElement(<ReleaseCalendarPage />) },
+      { path: "downloads", element: lazyElement(<Downloads />) },
+      { path: "health", element: lazyElement(<HealthPage />) },
+      { path: "library", element: lazyElement(<Library />) },
+      { path: "vfs", element: lazyElement(<VfsBrowser />) },
       { path: "profiles", element: <Navigate to="/settings?tab=quality" replace /> },
       { path: "tasks", element: <Navigate to="/settings?tab=tasks" replace /> },
-      { path: "services", element: <ServicesPage /> },
-      { path: "settings", element: <Settings /> },
+      { path: "services", element: lazyElement(<ServicesPage />) },
+      { path: "settings", element: lazyElement(<Settings />) },
       { path: "logs", element: <Navigate to="/settings?tab=logs" replace /> }
     ]
   }

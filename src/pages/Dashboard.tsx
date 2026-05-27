@@ -7,10 +7,11 @@ import { DraggableScroller } from "../components/DraggableScroller";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { PosterCardLink } from "../components/PosterCardLink";
 import { detailsHref } from "../lib/detailsHref";
+import { buildHeroItems, buildWatchGroups, compareRecentlyAdded, fallbackHero, matchingWatchGroup, uniqueLibraryTitles } from "../lib/dashboard";
 
 export function Dashboard() {
   const [heroIndex, setHeroIndex] = useState(0);
-  const library = useQuery({ queryKey: ["library"], queryFn: api.library, refetchInterval: 120000 });
+  const library = useQuery({ queryKey: ["library"], queryFn: api.library, refetchInterval: 30000 });
   const discover = useQuery({ queryKey: ["discover-home"], queryFn: api.discoverHome, refetchInterval: 180000 });
 
   const availableLibrary = useMemo(
@@ -26,16 +27,7 @@ export function Dashboard() {
     [availableLibrary]
   );
   const watchGroups = useMemo(() => buildWatchGroups(availableLibrary), [availableLibrary]);
-  const heroItems = useMemo(() => {
-    const combined = [...(discover.data?.tv ?? []), ...(discover.data?.movies ?? [])]
-      .filter((item) => item.backdropUrl)
-      .slice(0, 10)
-      .map((item) => ({
-        ...item,
-        watchGroup: matchingWatchGroup(item, watchGroups)
-      }));
-    return combined.length > 0 ? combined : fallbackHero(uniqueLibraryTitles(recentlyAdded), watchGroups);
-  }, [discover.data, recentlyAdded, watchGroups]);
+  const heroItems = useMemo(() => buildHeroItems(discover.data, recentlyAdded, watchGroups), [discover.data, recentlyAdded, watchGroups]);
 
   useEffect(() => {
     if (heroItems.length <= 1) return;
@@ -112,69 +104,6 @@ export function Dashboard() {
   );
 }
 
-function fallbackHero(items: MediaLibraryItem[], watchGroups: Map<string, string>) {
-  return items
-    .filter((item) => item.backdropUrl || item.posterUrl)
-    .slice(0, 8)
-    .map((item) => ({
-      mediaType: item.mediaType as "movie" | "tv",
-      title: item.title,
-      year: item.year ?? undefined,
-      tmdbId: item.tmdbId ?? undefined,
-      tvdbId: item.tvdbId ?? undefined,
-      imdbId: item.imdbId ?? undefined,
-      posterUrl: item.posterUrl ?? undefined,
-      backdropUrl: item.backdropUrl ?? item.posterUrl ?? undefined,
-      overview: item.overview ?? undefined,
-      watchGroup: matchingWatchGroup(item, watchGroups)
-    }));
-}
-
-function buildWatchGroups(items: MediaLibraryItem[]) {
-  const map = new Map<string, string>();
-  for (const item of items) {
-    const key = mediaKey(item);
-    if (!map.has(key)) {
-      const group = item.imdbId
-        ? `${item.mediaType}:imdb:${item.imdbId}`
-        : item.tmdbId
-          ? `${item.mediaType}:tmdb:${item.tmdbId}`
-          : item.tvdbId
-            ? `${item.mediaType}:tvdb:${item.tvdbId}`
-            : `${item.mediaType}:${normalizeTitle(item.title)}:${item.year ?? ""}`;
-      map.set(key, group);
-    }
-  }
-  return map;
-}
-
-function matchingWatchGroup(item: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }, watchGroups: Map<string, string>) {
-  return watchGroups.get(mediaKey(item));
-}
-
-function mediaKey(item: { mediaType: string; title: string; year?: number | null; tmdbId?: string | null; tvdbId?: string | null; imdbId?: string | null }) {
-  if (item.imdbId) return `${item.mediaType}:imdb:${item.imdbId}`;
-  if (item.tmdbId) return `${item.mediaType}:tmdb:${item.tmdbId}`;
-  if (item.tvdbId) return `${item.mediaType}:tvdb:${item.tvdbId}`;
-  return `${item.mediaType}:${normalizeTitle(item.title)}:${item.year ?? ""}`;
-}
-
-function uniqueLibraryTitles(items: MediaLibraryItem[]) {
-  const seen = new Set<string>();
-  return items
-    .sort(compareRecentlyAdded)
-    .filter((item) => {
-      const key = mediaKey(item);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
-function normalizeTitle(value: string) {
-  return value.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 function MediaRow({
   title,
   items,
@@ -229,12 +158,4 @@ function recentMeta(item: MediaLibraryItem | DiscoverMediaItem) {
 
 function episodeCode(season: number, episode: number) {
   return `S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`;
-}
-
-function compareRecentlyAdded(a: MediaLibraryItem, b: MediaLibraryItem) {
-  return (
-    Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
-    Date.parse(b.updatedAt) - Date.parse(a.updatedAt) ||
-    a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true })
-  );
 }

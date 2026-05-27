@@ -558,7 +558,7 @@ export function Settings() {
           <LabeledInput label="API key" value={draft.nzbhydraApiKey ?? ""} onChange={(value) => setDraft({ ...draft, nzbhydraApiKey: value })} />
           <LabeledInput label="Search cache TTL" type="number" value={String(draft.nzbhydraCacheTtlSeconds)} onChange={(value) => setDraft({ ...draft, nzbhydraCacheTtlSeconds: Number(value) })} />
           <LabeledInput label="RSS/update cache TTL" type="number" value={String(draft.nzbhydraFeedCacheTtlSeconds)} onChange={(value) => setDraft({ ...draft, nzbhydraFeedCacheTtlSeconds: Number(value) })} />
-          <LabeledInput label="RSS/update max results" type="number" value={String(draft.nzbhydraFeedMaxResults ?? 10000)} onChange={(value) => setDraft({ ...draft, nzbhydraFeedMaxResults: Number(value) || 10000 })} />
+          <LabeledInput label="RSS/update max results" type="number" value={String(draft.nzbhydraFeedMaxResults ?? 1200)} onChange={(value) => setDraft({ ...draft, nzbhydraFeedMaxResults: Number(value) || 1200 })} />
           <CheckboxLabel label="Backup working NZBs to nzb-backup/" checked={draft.backupNzbFiles} onChange={(checked) => setDraft({ ...draft, backupNzbFiles: checked })} />
         </SettingsCard>
         <SettingsCard title="Default Quality Profiles" tab="integrations" activeTab={settingsTab}>

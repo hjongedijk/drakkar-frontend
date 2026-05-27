@@ -1,28 +1,38 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useMachine } from "@xstate/react";
 import { Play, RefreshCw } from "lucide-react";
-import { api, type ScheduledTask } from "../api/client";
+import { type ScheduledTask } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { StatusPill } from "../components/StatusPill";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { useToast } from "../components/ToastProvider";
+import { tasksMachine } from "../machines/tasksMachine";
 
 export function TasksPage() {
-  const queryClient = useQueryClient();
-  const tasks = useQuery({
-    queryKey: ["tasks"],
-    queryFn: api.tasks,
-    refetchInterval: 5000
-  });
-  const runTask = useMutation({
-    mutationFn: api.runTask,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] })
-  });
+  const { notify } = useToast();
+  const [state, send] = useMachine(tasksMachine);
+  const { tasks, error, runningTaskId } = state.context;
 
-  if (tasks.isLoading) return <LoadingState />;
-  if (tasks.isError || !tasks.data) return <ErrorState message="Could not load scheduled tasks." />;
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      send({ type: "refresh" });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [send]);
 
-  const runningCount = tasks.data.tasks.filter((task) => task.status === "running").length;
-  const enabledCount = tasks.data.tasks.filter((task) => task.enabled).length;
+  useEffect(() => {
+    if (!error || state.matches("loadFailed")) return;
+    notify(error, "error");
+    send({ type: "dismissError" });
+  }, [error, notify, send, state]);
+
+  if (state.matches("loading")) return <LoadingState />;
+  if (state.matches("loadFailed")) return <ErrorState message={error ?? "Could not load scheduled tasks."} />;
+
+  const runningCount = tasks.filter((task) => task.status === "running").length;
+  const enabledCount = tasks.filter((task) => task.enabled).length;
+  const busy = state.matches({ ready: "refreshing" }) || state.matches({ ready: "running" });
 
   return (
     <div className="space-y-6">
@@ -40,15 +50,18 @@ export function TasksPage() {
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b p-5">
           <h2 className="text-xl font-semibold">Scheduled</h2>
-          <Button variant="outline" onClick={() => tasks.refetch()}>
+          <Button variant="outline" onClick={() => send({ type: "refresh" })} disabled={busy}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
         </div>
 
         <div className="space-y-3 p-4 md:hidden">
-          {tasks.data.tasks.map((task) => (
-            <TaskCard key={task.id} task={task} running={runTask.isPending} onRun={() => runTask.mutate(task.id)} />
+          {tasks.map((task) => (
+            <TaskCard key={task.id} task={task} running={busy} onRun={() => {
+              notify(`Starting ${task.name}...`, "info");
+              send({ type: "run", taskId: task.id });
+            }} />
           ))}
         </div>
 
@@ -66,7 +79,7 @@ export function TasksPage() {
               </tr>
             </thead>
             <tbody>
-              {tasks.data.tasks.map((task) => (
+              {tasks.map((task) => (
                 <tr key={task.id} className="border-b border-white/5 align-top last:border-0">
                   <td className="p-4">
                     <div className="font-semibold">{task.name}</div>
@@ -81,11 +94,14 @@ export function TasksPage() {
                   <td className="p-4 text-right">
                     <Button
                       variant="outline"
-                      disabled={!task.enabled || !task.manualRunnable || task.status === "running" || runTask.isPending}
-                      onClick={() => runTask.mutate(task.id)}
+                      disabled={!task.enabled || !task.manualRunnable || task.status === "running" || busy}
+                      onClick={() => {
+                        notify(`Starting ${task.name}...`, "info");
+                        send({ type: "run", taskId: task.id });
+                      }}
                     >
                       <Play className="mr-2 h-4 w-4" />
-                      Run
+                      {runningTaskId === task.id ? "Running..." : "Run"}
                     </Button>
                   </td>
                 </tr>
