@@ -27,7 +27,7 @@ export function VfsBrowser() {
   });
   const streams = useQuery({ queryKey: ["vfs", "streams"], queryFn: api.streamSessions, refetchInterval: 10000 });
   const metrics = useQuery({ queryKey: ["vfs", "streams", "metrics"], queryFn: api.streamMetrics, refetchInterval: 10000 });
-  const fuse = useQuery({ queryKey: ["vfs", "fuse"], queryFn: api.fuseStatus, refetchInterval: 15000 });
+  const vfsMount = useQuery({ queryKey: ["vfs", "mount"], queryFn: api.vfsMountStatus, refetchInterval: 15000 });
   const bandwidth = useQuery({ queryKey: ["vfs", "bandwidth"], queryFn: api.bandwidthStatus, refetchInterval: 15000 });
   const refresh = useRefreshMutation(() => api.refreshVfs(), [["vfs", path]], { success: "VFS refreshed." });
   const createFolder = useRefreshMutation((targetPath: string) => api.createVfsFolder(targetPath), [["vfs", path]], { success: "Folder created." });
@@ -246,7 +246,7 @@ export function VfsBrowser() {
       <section className="grid gap-4 lg:grid-cols-4">
         <div className="rounded-lg border bg-card p-4">
           <h2 className="mb-3 text-sm font-semibold">FUSE mount</h2>
-          <p className="text-sm text-muted-foreground">{fuse.data?.mounted ? "Mounted" : fuse.data?.enabled ? "Enabled, not mounted" : "Disabled"} at {fuse.data?.path ?? "/fuse"}</p>
+          <p className="text-sm text-muted-foreground">{vfsMount.data?.mounted ? "Mounted" : vfsMount.data?.enabled ? "Enabled, not mounted" : "Disabled"} at {vfsMount.data?.path ?? "/mnt/drakkar/vfs"}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <h2 className="mb-3 text-sm font-semibold">Bandwidth</h2>
@@ -273,7 +273,7 @@ export function VfsBrowser() {
                 <div className="break-all text-sm font-medium">{stream.path}</div>
                 <div className="mt-3 flex flex-wrap gap-1">
                   <Badge>{stream.status}</Badge>
-                  <Badge>{stream.source ?? "fuse"}</Badge>
+                  <Badge>{stream.source ?? "vfs"}</Badge>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">{stream.range || `${stream.start}-${stream.end}`}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{formatBytes(stream.bytesSent)}</p>
@@ -293,7 +293,7 @@ export function VfsBrowser() {
                 <tr key={stream.id} className="border-b last:border-0">
                   <td className="max-w-xl truncate p-3 font-medium">{stream.path}</td>
                   <td className="p-3"><Badge>{stream.status}</Badge></td>
-                  <td className="p-3 text-muted-foreground">{stream.source ?? "fuse"}</td>
+                  <td className="p-3 text-muted-foreground">{stream.source ?? "vfs"}</td>
                   <td className="p-3 text-muted-foreground">{stream.range || `${stream.start}-${stream.end}`}</td>
                   <td className="p-3 text-muted-foreground">{formatBytes(stream.bytesSent)}</td>
                   <td className="p-3 text-right">

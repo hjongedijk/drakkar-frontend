@@ -3,7 +3,6 @@ import { HeartPulse } from "lucide-react";
 import { api } from "../api/client";
 import { ErrorState, LoadingState } from "../components/PageState";
 import { StatusPill } from "../components/StatusPill";
-import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 
 export function HealthPage() {
@@ -29,13 +28,15 @@ export function HealthPage() {
       <Card className="p-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-2xl font-semibold">Overview</h2>
-          <StatusPill value="Completed checks · last 30 days" />
+          <StatusPill value="Live status" />
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           <StatCard label="Total Checked" value={overview.totalChecked} />
           <StatCard label={`Healthy (${percent(overview.healthy)}%)`} value={overview.healthy} tone="text-emerald-400" progress={percent(overview.healthy)} progressTone="bg-emerald-300" />
-          <StatCard label={`Repaired by health check (${percent(overview.repaired)}%)`} value={overview.repaired} tone="text-cyan-400" progress={percent(overview.repaired)} progressTone="bg-cyan-300" />
-          <StatCard label={`Deleted by health check (${percent(overview.deleted)}%)`} value={overview.deleted} tone="text-red-400" progress={percent(overview.deleted)} progressTone="bg-red-300" />
+          <StatCard label="Checks running now" value={overview.running} tone="text-cyan-400" />
+          <StatCard label="Never checked yet" value={overview.pending} tone="text-amber-300" />
+          <StatCard label="Failed imports" value={overview.failedImports} tone="text-rose-300" />
+          <StatCard label="Broken symlinks" value={overview.brokenSymlinks} tone="text-orange-300" />
         </div>
       </Card>
 
@@ -56,7 +57,7 @@ export function HealthPage() {
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b p-5">
           <h2 className="text-2xl font-semibold">Schedule</h2>
-          <StatusPill value={`${schedule.length} items loaded`} />
+          <StatusPill value={`${schedule.length} items loaded · ${overview.running} running`} />
         </div>
 
         {schedule.length === 0 ? (
@@ -102,28 +103,6 @@ export function HealthPage() {
             </table>
           </div>
           </>
-        )}
-      </Card>
-
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b p-5">
-          <h2 className="text-2xl font-semibold">Recent Outcomes</h2>
-          <StatusPill value={`${health.data.recentResults.length} recent checks`} />
-        </div>
-        {health.data.recentResults.length === 0 ? (
-          <div className="p-6 text-sm text-muted-foreground">No completed health-check outcomes recorded yet.</div>
-        ) : (
-          <div className="space-y-3 p-4">
-            {health.data.recentResults.map((result) => (
-              <div key={result.id} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Badge>{result.outcome}</Badge>
-                  <span className="text-xs text-muted-foreground">{formatDate(result.completedAt, "-")}</span>
-                </div>
-                <p className="mt-2 text-sm">{result.message || "Completed without extra details."}</p>
-              </div>
-            ))}
-          </div>
         )}
       </Card>
     </div>

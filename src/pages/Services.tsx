@@ -37,7 +37,7 @@ export function ServicesPage() {
     { key: "seerr", label: "Seerr", ok: status.data.seerr === "ok" && setup.data.checks.requestProvider, detail: setup.data.checks.requestProvider ? status.data.seerr : "not configured", icon: Tv },
     { key: "metadata", label: "Metadata", ok: setup.data.checks.metadata, detail: setup.data.checks.metadata ? "configured" : "needs API key", icon: ShieldCheck },
     { key: "plex", label: "Plex", ok: setup.data.checks.plex, detail: setup.data.checks.plex ? "configured" : "not configured", icon: Tv },
-    { key: "fuse", label: "FUSE / VFS", ok: Boolean(status.data.fuse?.enabled && status.data.fuse?.mounted), detail: status.data.fuse?.mounted ? status.data.fuse.path : (status.data.fuse?.error || "not mounted"), icon: FolderTree }
+    { key: "vfsMount", label: "VFS Mount", ok: Boolean(status.data.vfsMount?.enabled && status.data.vfsMount?.mounted), detail: status.data.vfsMount?.mounted ? status.data.vfsMount.path : (status.data.vfsMount?.error || "not mounted"), icon: FolderTree }
   ];
 
   const healthyCount = rows.filter((row) => row.ok).length;

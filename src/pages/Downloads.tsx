@@ -47,7 +47,9 @@ export function Downloads() {
   const retry = useRefreshMutation((id: string) => api.retry(id), [["downloads", "queue"]], { success: "Retry queued" });
   const makeAvailable = useRefreshMutation((id: string) => api.makeAvailable(id), [["downloads", "queue"], ["downloads", "history"], ["library"]], { success: "Library link created" });
   const remove = useRefreshMutation((id: string) => api.deleteDownload(id), [["downloads", "queue"], ["downloads", "history"]], { success: "Download deleted" });
-  const cleanupHistory = useRefreshMutation(() => api.cleanupHistory(), [["downloads", "history"]], { success: "Download history cleaned up" });
+  const cleanupHistory = useRefreshMutation(() => api.cleanupHistory(), [["downloads", "history"], ["downloads", "queue"]], {
+    success: (result) => `Cleanup removed ${result.deleted} failed/cancelled download(s), ${result.cleanedFailedJobs} failed worker job(s).`
+  });
 
   const activePage = tab === "queue" ? queue.data : history.data;
   const active = activePage?.items;

@@ -507,17 +507,17 @@ export function Settings() {
   const applyQueuePreset = (preset: "balanced" | "streaming" | "downloads") => {
     const total = Math.max(1, totalConnectionBudget);
     if (preset === "streaming") {
-      const streaming = Math.min(total, Math.max(6, Math.ceil(total * 0.35)));
-      setPolicyDraft({ ...policyDraft, streamingPriority: 85, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(1, total - streaming) });
+      const streaming = Math.min(total, Math.max(12, Math.ceil(total * 0.45)));
+      setPolicyDraft({ ...policyDraft, streamingPriority: 78, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(4, total - streaming) });
       return;
     }
     if (preset === "downloads") {
-      const streaming = Math.min(total, Math.max(3, Math.ceil(total * 0.15)));
-      setPolicyDraft({ ...policyDraft, streamingPriority: 65, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(1, total - streaming) });
+      const streaming = Math.min(total, Math.max(8, Math.ceil(total * 0.25)));
+      setPolicyDraft({ ...policyDraft, streamingPriority: 60, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(6, total - streaming) });
       return;
     }
-    const streaming = Math.min(total, Math.max(6, Math.ceil(total * 0.2)));
-    setPolicyDraft({ ...policyDraft, streamingPriority: 80, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(1, total - streaming) });
+    const streaming = Math.min(total, Math.max(10, Math.ceil(total * 0.35)));
+    setPolicyDraft({ ...policyDraft, streamingPriority: 70, maxStreamingConnections: streaming, maxDownloadConnections: Math.max(6, total - streaming) });
   };
   const wideSettingsTab = settingsTab === "quality" || settingsTab === "logs";
 
@@ -577,7 +577,7 @@ export function Settings() {
           <div className="grid gap-2 md:grid-cols-2">
             <LabeledInput label="Plex server URL" value={draft.plexServerUrl ?? ""} onChange={(value) => setDraft({ ...draft, plexServerUrl: value })} />
             <LabeledInput label="Plex token" type="password" value={draft.plexToken ?? ""} onChange={(value) => setDraft({ ...draft, plexToken: value })} />
-            <LabeledInput label="Plex library path" value={draft.plexLibraryPath ?? "/mnt/media"} onChange={(value) => setDraft({ ...draft, plexLibraryPath: value || "/mnt/media" })} />
+            <LabeledInput label="Plex library path" value={draft.plexLibraryPath ?? "/mnt/drakkar/media"} onChange={(value) => setDraft({ ...draft, plexLibraryPath: value || "/mnt/drakkar/media" })} />
             <LabeledInput label="Section ID (optional)" value={draft.plexSectionId ?? ""} onChange={(value) => setDraft({ ...draft, plexSectionId: value })} />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -593,6 +593,7 @@ export function Settings() {
           {plexMessage ? <p className="text-xs text-muted-foreground">{plexMessage}</p> : null}
         </SettingsCard>
         <SettingsCard title="Seerr" tab="providers" activeTab={settingsTab}>
+          <p className="text-sm text-muted-foreground">Webhooks handle normal request updates. Drakkar does one full Seerr import at startup, and you can still run a manual full sync from Tasks.</p>
           <div className="space-y-2">
             {(providers.data ?? []).map((provider) => (
               <div key={provider.id} className="space-y-3 rounded-md border p-3">
@@ -861,12 +862,12 @@ export function Settings() {
         </SettingsCard>
         <SettingsCard title="Paths" tab="system" activeTab={settingsTab}>
           <div className="space-y-2 text-sm text-muted-foreground">
-            <p>Active downloads: <span className="font-mono text-foreground">/data/downloads</span></p>
-            <p>Finished media: <span className="font-mono text-foreground">/data/completed</span></p>
-            <p>Working NZBs: <span className="font-mono text-foreground">/data/nzb</span></p>
+            <p>Streamable content: <span className="font-mono text-foreground">/mnt/drakkar/vfs/content</span></p>
+            <p>Completed symlink feed: <span className="font-mono text-foreground">/mnt/drakkar/vfs/completed-symlinks</span></p>
+            <p>Working NZBs: <span className="font-mono text-foreground">/mnt/drakkar/vfs/nzbs</span></p>
             <p>Optional NZB backups: <span className="font-mono text-foreground">/data/nzb-backup</span></p>
-            <p>Plex / media clients: <span className="font-mono text-foreground">/mnt/media</span></p>
-            <p>FUSE mountpoint: <span className="font-mono text-foreground">/mnt/fuse</span></p>
+            <p>Plex / media clients: <span className="font-mono text-foreground">/mnt/drakkar/media</span></p>
+            <p>VFS mountpoint: <span className="font-mono text-foreground">/mnt/drakkar/vfs</span></p>
           </div>
         </SettingsCard>
         <SettingsCard title="Redis / PostgreSQL" tab="system" activeTab={settingsTab}>
@@ -920,7 +921,7 @@ export function Settings() {
         </SettingsCard>
         <SettingsCard title="Queue Management" tab="queue" activeTab={settingsTab}>
           <div className="rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
-            Total connections come from enabled Usenet providers. Streaming keeps protected capacity; queue uses leftover connections instead of stopping completely.
+            Total connections come from enabled Usenet providers. WebDAV + rclone playback stays protected, while downloads use the remaining headroom instead of fully pausing.
           </div>
           <div className={`grid gap-2 rounded-xl border p-3 text-sm md:grid-cols-4 ${overConnectionBudget ? "border-destructive/40 bg-destructive/10 text-destructive" : "border-border/60 bg-background/50 text-foreground"}`}>
             <MetricCard label="Provider total" value={String(totalConnectionBudget)} />
@@ -940,7 +941,7 @@ export function Settings() {
             <LabeledInput label="Max download connections" type="number" value={String(policyDraft.maxDownloadConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxDownloadConnections: Number(value) })} />
             <LabeledInput label="Max streaming connections" type="number" value={String(policyDraft.maxStreamingConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxStreamingConnections: Number(value) })} />
             <LabeledInput label="Max total connections" type="number" value={String(policyDraft.maxTotalUsenetConnections)} onChange={(value) => setPolicyDraft({ ...policyDraft, maxTotalUsenetConnections: Number(value) })} disabled />
-            <LabeledInput label="Queue seed target" type="number" value={String(draft.monitorQueueSeedTarget ?? 50)} onChange={(value) => setDraft({ ...draft, monitorQueueSeedTarget: Number(value) || 50 })} />
+            <LabeledInput label="Queue seed target" type="number" value={String(draft.monitorQueueSeedTarget ?? 12)} onChange={(value) => setDraft({ ...draft, monitorQueueSeedTarget: Number(value) || 12 })} />
             <LabeledSelect label="Duplicate NZB" value={policyDraft.duplicateNzbBehavior} onChange={(value) => setPolicyDraft({ ...policyDraft, duplicateNzbBehavior: value as typeof policyDraft.duplicateNzbBehavior })}>
               <option value="mark_failed">Mark failed</option>
               <option value="ignore_existing">Ignore existing</option>
@@ -1142,14 +1143,18 @@ export function Settings() {
                     label="Custom interval minutes"
                     type="number"
                     value={draft.taskIntervals?.[task.id] ? String(Math.round((draft.taskIntervals[task.id] ?? 0) / 60000)) : ""}
-                    onChange={(value) =>
+                    onChange={(value) => {
+                      const taskIntervals = { ...(draft.taskIntervals ?? {}) };
+                      if (value.trim()) {
+                        taskIntervals[task.id] = Math.max(1, Number(value) || 0) * 60_000;
+                      } else {
+                        delete taskIntervals[task.id];
+                      }
                       setDraft({
                         ...draft,
-                        taskIntervals: {
-                          ...(draft.taskIntervals ?? {}),
-                          [task.id]: value.trim() ? Math.max(1, Number(value) || 0) * 60_000 : null
-                        }
-                      })}
+                        taskIntervals
+                      });
+                    }}
                   />
                   <div className="rounded-xl border border-border/70 bg-card/70 px-3 py-2 text-xs font-medium text-muted-foreground md:mb-0.5">
                     Effective now: {formatInterval(task.intervalMs)}
@@ -1281,7 +1286,7 @@ export function Settings() {
           )}
         </SettingsCard>
         <SettingsCard title="FUSE / SAB API" tab="system" activeTab={settingsTab} fullWidth>
-          <p className="text-sm text-muted-foreground">Drakkar mounts releases through FUSE at <span className="font-mono text-foreground">/mnt/fuse</span>, while Plex/library files live at <span className="font-mono text-foreground">/mnt/media</span>. SAB compatibility stays available for tools that push NZBs.</p>
+          <p className="text-sm text-muted-foreground">Drakkar exposes releases through WebDAV + rclone VFS at <span className="font-mono text-foreground">/mnt/drakkar/vfs</span>, while Plex/library files live at <span className="font-mono text-foreground">/mnt/drakkar/media</span>. Direct media is mounted for streaming; archives stay on the mounted VFS path instead of being unpacked into a downloads folder.</p>
         </SettingsCard>
         <SettingsCard title="Danger Zone" tab="system" activeTab={settingsTab} fullWidth>
           <div className="space-y-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3">

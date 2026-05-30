@@ -103,7 +103,7 @@ export type ApiStatus = {
   storageUsage: { usedBytes: number; totalBytes: number; freeBytes: number } | null;
   queues?: Record<string, number>;
   bandwidth?: BandwidthStatus;
-  fuse?: FuseStatus;
+  vfsMount?: FuseStatus;
 };
 
 export type AuthUser = {
@@ -143,6 +143,10 @@ export type HealthChecksResponse = {
     healthy: number;
     repaired: number;
     deleted: number;
+    running: number;
+    pending: number;
+    failedImports: number;
+    brokenSymlinks: number;
   };
   uncheckedCount: number;
   schedule: HealthCheckItem[];
@@ -448,6 +452,8 @@ export type RequestMonitorSeason = {
     available: boolean;
     downloading: boolean;
     status: "available" | "downloading" | "missing_monitored";
+    libraryItemId?: string;
+    subtitleLanguages?: string[];
   }>;
 };
 
@@ -909,6 +915,7 @@ export type MediaLibraryItem = {
   requestedBy?: string | null;
   requestProvider?: string | null;
   requestId?: string | null;
+  qualityProfileId?: string | null;
   downloadId?: string | null;
   nzbId?: string | null;
   vfsMountId?: string | null;
@@ -1007,6 +1014,13 @@ export const api = {
   autoReplaceLibraryItem: (id: string) => apiRequest<unknown>(`/api/library/${id}/replace-auto`, { method: "POST" }),
   replaceLibraryItem: (id: string, release: Release) =>
     apiRequest<unknown>(`/api/library/${id}/replace-release`, { method: "POST", body: JSON.stringify({ release }) }),
+  refreshLibrarySubtitle: (id: string, language?: string) =>
+    apiRequest<{ downloaded: number; skipped: number; subtitleLanguages: string[] }>(`/api/library/${id}/subtitles/refresh`, {
+      method: "POST",
+      body: JSON.stringify({ language })
+    }),
+  deleteLibrarySubtitle: (id: string, language: string) =>
+    apiRequest<{ deleted: boolean; subtitleLanguages: string[] }>(`/api/library/${id}/subtitles/${encodeURIComponent(language)}`, { method: "DELETE" }),
   profiles: () => apiRequest<QualityProfile[]>("/api/profiles"),
   scoreRelease: (profileId: string, release: Release) =>
     apiRequest<{ accepted: boolean; score: number; reasons: string[] }>("/api/releases/score", {
@@ -1029,6 +1043,8 @@ export const api = {
   grabRequestEpisode: (id: string, season: number, episode: number) =>
     apiRequest<unknown>(`/api/requests/${id}/episodes/${season}/${episode}/download`, { method: "POST" }),
   grabRequest: (id: string) => apiRequest<unknown>(`/api/requests/${id}/download`, { method: "POST" }),
+  updateRequestProfile: (id: string, profileId: string) =>
+    apiRequest<MediaRequest>(`/api/requests/${id}/profile`, { method: "PATCH", body: JSON.stringify({ profileId }) }),
   grabRequestRelease: (id: string, release: Release) =>
     apiRequest<unknown>(`/api/requests/${id}/grab-release`, { method: "POST", body: JSON.stringify({ release }) }),
   search: (kind: "manual" | "movie" | "tv" | "season" | "episode", body: Record<string, unknown>) =>
@@ -1063,7 +1079,7 @@ export const api = {
   streamSessions: () => apiRequest<StreamSession[]>("/api/vfs/streams"),
   streamMetrics: () => apiRequest<StreamMetrics>("/api/vfs/streams/metrics"),
   stopStream: (id: string) => apiRequest<{ ok: boolean }>(`/api/vfs/streams/${id}/stop`, { method: "POST" }),
-  fuseStatus: () => apiRequest<FuseStatus>("/api/vfs/fuse"),
+  vfsMountStatus: () => apiRequest<FuseStatus>("/api/vfs/mount"),
   bandwidthStatus: () => apiRequest<BandwidthStatus>("/api/vfs/bandwidth"),
   tasks: () => apiRequest<{ tasks: ScheduledTask[] }>("/api/tasks"),
   runTask: (id: string) => apiRequest<{ task: ScheduledTask | null; skipped: boolean; accepted?: boolean; reason?: string; conflictingTaskId?: string }>(`/api/tasks/${id}/run`, { method: "POST", body: "{}" }),

@@ -70,10 +70,6 @@ export function LoginPage() {
             {submitting ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-
-        <div className="rounded-2xl border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
-          Initial local admin account: <span className="font-semibold">admin</span>. Default bootstrap password is <span className="font-semibold">password1234</span> and should be changed after first login.
-        </div>
       </div>
     </div>
   );

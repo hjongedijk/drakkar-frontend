@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Download, RefreshCw, Search, Sparkles, Trash2, Tv } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { api, type MediaLibraryItem, type MediaRequest, type Release, type RequestMonitor } from "../api/client";
+import { api, type MediaLibraryItem, type MediaRequest, type QualityProfile, type Release, type RequestMonitor } from "../api/client";
 import { EmptyState, ErrorState, LoadingState } from "../components/PageState";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Select } from "../components/ui/select";
 import { useToast } from "../components/ToastProvider";
 
 type LibraryGroup = {
@@ -37,13 +38,6 @@ function cleanSeriesTitle(value: string) {
     .replace(/\s+/g, " ")
     .trim();
 }
-
-const monitorLegend = [
-  { label: "Completed (Monitored)", classes: "bg-[#22c55e]" },
-  { label: "Completed (Unmonitored)", classes: "bg-[#5f98ff]" },
-  { label: "Downloading / Grabbed", classes: "bg-[#8b5cf6]" },
-  { label: "Missing", classes: "bg-[#ff5b5b]" }
-];
 
 const activeDownloadStatuses = new Set(["queued", "fetching_nzb", "verifying", "prepared", "waiting_for_provider", "waiting_for_nzb", "downloading", "paused"]);
 const inProgressMovieRequestStatuses = new Set(["grabbed", "importing", "processing", "prepared"]);
@@ -81,6 +75,7 @@ export function Library() {
 
   const items = useQuery({ queryKey: ["library"], queryFn: api.library, refetchInterval: 60000 });
   const requests = useQuery({ queryKey: ["requests", "summary"], queryFn: () => api.requestsSummary().then((result) => result.items), refetchInterval: 30000 });
+  const profiles = useQuery({ queryKey: ["profiles"], queryFn: api.profiles, staleTime: 5 * 60 * 1000 });
   const syncRequests = useMutation({
     mutationFn: api.syncRequests,
     onSuccess: (result) => {
@@ -174,6 +169,33 @@ export function Library() {
     },
     onError: (error) => notify(error instanceof Error ? error.message : "Could not queue episode.", "error")
   });
+  const updateRequestProfile = useMutation({
+    mutationFn: ({ requestId, profileId }: { requestId: string; profileId: string }) => api.updateRequestProfile(requestId, profileId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+      notify("Quality profile updated.", "success");
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Could not update quality profile.", "error")
+  });
+  const refreshSubtitle = useMutation({
+    mutationFn: ({ itemId, language }: { itemId: string; language?: string }) => api.refreshLibrarySubtitle(itemId, language),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+      void queryClient.invalidateQueries({ queryKey: ["requests"] });
+      notify("Subtitle refreshed.", "success");
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Subtitle refresh failed.", "error")
+  });
+  const deleteSubtitle = useMutation({
+    mutationFn: ({ itemId, language }: { itemId: string; language: string }) => api.deleteLibrarySubtitle(itemId, language),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+      void queryClient.invalidateQueries({ queryKey: ["requests"] });
+      notify("Subtitle removed.", "success");
+    },
+    onError: (error) => notify(error instanceof Error ? error.message : "Subtitle delete failed.", "error")
+  });
 
   const groups = useMemo(() => buildGroups(items.data ?? [], requests.data ?? []), [items.data, requests.data]);
   const visibleGroups = groups.filter((group) => {
@@ -201,7 +223,7 @@ export function Library() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Library</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Requested media, monitored availability, and imported files in one place.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Requests, availability, quality, subtitles.</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-flow-col sm:grid-cols-none">
           {(["all", "movie", "tv"] as const).map((value) => (
@@ -241,15 +263,6 @@ export function Library() {
         <Metric label="Available Items" value={groups.reduce((sum, group) => sum + group.availableCount, 0)} />
         <Metric label="Downloading" value={groups.reduce((sum, group) => sum + group.downloadingCount, 0)} />
         <Metric label="Missing" value={groups.reduce((sum, group) => sum + group.missingCount, 0)} />
-      </section>
-
-      <section className="flex flex-wrap gap-3 rounded-2xl border bg-card p-4 text-xs">
-        {monitorLegend.map((item) => (
-          <div key={item.label} className="flex items-center gap-2">
-            <span className={`h-3 w-8 rounded-full ${item.classes}`} />
-            <span className="text-muted-foreground">{item.label}</span>
-          </div>
-        ))}
       </section>
 
       {visibleGroups.length === 0 ? (
@@ -305,6 +318,19 @@ export function Library() {
           onReplaceRelease={(id, release) => {
             notify("Queueing selected replacement...", "info");
             replaceWithRelease.mutate({ id, release });
+          }}
+          profiles={profiles.data ?? []}
+          onUpdateProfile={(requestId, profileId) => {
+            notify("Updating quality profile...", "info");
+            updateRequestProfile.mutate({ requestId, profileId });
+          }}
+          onRefreshSubtitle={(itemId, language) => {
+            notify("Refreshing subtitle...", "info");
+            refreshSubtitle.mutate({ itemId, language });
+          }}
+          onDeleteSubtitle={(itemId, language) => {
+            notify(`Removing ${language} subtitle...`, "info");
+            deleteSubtitle.mutate({ itemId, language });
           }}
         />
       ) : null}
@@ -496,6 +522,7 @@ function mergeGhostGroups(groups: LibraryGroup[]) {
         item.sourceKey.startsWith("import:") &&
         (item.libraryStatus === "grabbed" || item.libraryStatus === "searching" || item.libraryStatus === "requested")
     ).length;
+    applyRequestSummaryCounts(combined);
     result.push(combined);
     for (const candidate of bucket) {
       if (candidate.key === canonical.key) continue;
@@ -505,6 +532,13 @@ function mergeGhostGroups(groups: LibraryGroup[]) {
   }
 
   return result;
+}
+
+function applyRequestSummaryCounts(group: LibraryGroup) {
+  if (group.mediaType !== "tv" || !group.request?.monitorSummary) return;
+  group.availableCount = Math.max(group.availableItems.length, group.request.monitorSummary.availableCount);
+  group.missingCount = group.request.monitorSummary.missingCount;
+  group.downloadingCount = group.request.monitorSummary.downloadingCount;
 }
 
 function shouldMergeGhostGroup(canonical: LibraryGroup, candidate: LibraryGroup) {
@@ -648,7 +682,11 @@ function LibraryDetails({
   onDelete,
   onSearchReplace,
   onAutoReplace,
-  onReplaceRelease
+  onReplaceRelease,
+  profiles,
+  onUpdateProfile,
+  onRefreshSubtitle,
+  onDeleteSubtitle
 }: {
   group: LibraryGroup;
   replacement: { item: MediaLibraryItem; releases: Release[] } | null;
@@ -660,6 +698,10 @@ function LibraryDetails({
   onSearchReplace: (id: string) => void;
   onAutoReplace: (ids: string[]) => void;
   onReplaceRelease: (id: string, release: Release) => void;
+  profiles: QualityProfile[];
+  onUpdateProfile: (requestId: string, profileId: string) => void;
+  onRefreshSubtitle: (itemId: string, language?: string) => void;
+  onDeleteSubtitle: (itemId: string, language: string) => void;
 }) {
   const monitor = useQuery({
     queryKey: ["requests", group.request?.id, "monitor"],
@@ -680,6 +722,13 @@ function LibraryDetails({
   }, [group.items]);
   const primaryAvailable = group.availableItems[0];
   const subtitleLanguages = groupSubtitleLanguages(group);
+  const [profileId, setProfileId] = useState(group.request?.selectedProfileId ?? profiles[0]?.id ?? "");
+
+  useEffect(() => {
+    setProfileId(group.request?.selectedProfileId ?? profiles[0]?.id ?? "");
+  }, [group.request?.id, group.request?.selectedProfileId, profiles]);
+
+  const selectedProfile = profiles.find((profile) => profile.id === (profileId || group.request?.selectedProfileId));
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -700,6 +749,7 @@ function LibraryDetails({
                     <Badge>{groupStatus(group).label}</Badge>
                     <Badge>{group.availableCount} available</Badge>
                     {group.missingCount > 0 ? <Badge>{group.missingCount} missing</Badge> : null}
+                    {selectedProfile ? <Badge>Profile {selectedProfile.name}</Badge> : null}
                     {subtitleLanguages.length > 0 ? <Badge>Subs {subtitleLanguages.join(", ")}</Badge> : null}
                   </div>
                 </div>
@@ -730,6 +780,19 @@ function LibraryDetails({
                   </>
                 ) : null}
               </div>
+              {group.request?.id && profiles.length > 0 ? (
+                <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 md:max-w-xl md:grid-cols-[1fr_auto]">
+                  <Select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
+                    {profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>{profile.name}</option>
+                    ))}
+                  </Select>
+                  <Button disabled={profileId === (group.request.selectedProfileId ?? "")} onClick={() => onUpdateProfile(group.request!.id, profileId)}>
+                    Save Profile
+                  </Button>
+                  <p className="text-xs text-muted-foreground md:col-span-2">Episode search/download and replacement actions use current quality profile.</p>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -737,7 +800,19 @@ function LibraryDetails({
         <div className="space-y-5 p-6">
           {replacement ? <ReplacementPanel replacement={replacement} onGrab={onReplaceRelease} /> : null}
           {group.mediaType === "tv" ? (
-            monitor.data ? <MonitorSeasonList monitor={monitor.data} onSearchEpisode={onSearchEpisode} onGrabEpisode={onGrabEpisode} /> : monitor.isLoading ? <LoadingState /> : <ImportSeasonList seasons={standaloneSeasons} />
+            monitor.data ? (
+              <MonitorSeasonList
+                monitor={monitor.data}
+                onSearchEpisode={onSearchEpisode}
+                onGrabEpisode={onGrabEpisode}
+                onRefreshSubtitle={onRefreshSubtitle}
+                onDeleteSubtitle={onDeleteSubtitle}
+              />
+            ) : monitor.isLoading ? (
+              <LoadingState />
+            ) : (
+              <ImportSeasonList seasons={standaloneSeasons} onRefreshSubtitle={onRefreshSubtitle} onDeleteSubtitle={onDeleteSubtitle} />
+            )
           ) : (
             <MovieStatusPanel group={group} />
           )}
@@ -792,11 +867,15 @@ function MovieStatusPanel({ group }: { group: LibraryGroup }) {
 function MonitorSeasonList({
   monitor,
   onSearchEpisode,
-  onGrabEpisode
+  onGrabEpisode,
+  onRefreshSubtitle,
+  onDeleteSubtitle
 }: {
   monitor: RequestMonitor;
   onSearchEpisode: (requestId: string, season: number, episode: number) => void;
   onGrabEpisode: (requestId: string, season: number, episode: number) => void;
+  onRefreshSubtitle: (itemId: string, language?: string) => void;
+  onDeleteSubtitle: (itemId: string, language: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -815,34 +894,47 @@ function MonitorSeasonList({
           </summary>
           <div className="border-t px-4 py-4">
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {season.episodes.map((episode) => (
-                <div key={episode.episodeNumber} className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
-                  <span className="min-w-0 truncate font-medium">
-                    E{String(episode.episodeNumber).padStart(2, "0")}
-                    {episode.title ? ` - ${episode.title}` : ""}
-                  </span>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <span className={`rounded-full px-2 py-1 text-[11px] font-bold ${episodeStatusClass(episode.status)}`}>{episodeStatusLabel(episode.status)}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Search this episode"
-                      onClick={() => onSearchEpisode(monitor.request.id, season.seasonNumber, episode.episodeNumber)}
-                    >
-                      <Search className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Download this episode"
-                      disabled={episode.status === "available" || episode.status === "downloading"}
-                      onClick={() => onGrabEpisode(monitor.request.id, season.seasonNumber, episode.episodeNumber)}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
+              {season.episodes.map((episode) => {
+                const subtitleLanguages = episode.subtitleLanguages ?? [];
+                return (
+                  <div key={episode.episodeNumber} className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate font-medium">
+                        E{String(episode.episodeNumber).padStart(2, "0")}
+                        {episode.title ? ` - ${episode.title}` : ""}
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-bold ${episodeStatusClass(episode.status)}`}>{episodeStatusLabel(episode.status)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Search this episode"
+                          onClick={() => onSearchEpisode(monitor.request.id, season.seasonNumber, episode.episodeNumber)}
+                        >
+                          <Search className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Download this episode"
+                          disabled={episode.status === "available" || episode.status === "downloading"}
+                          onClick={() => onGrabEpisode(monitor.request.id, season.seasonNumber, episode.episodeNumber)}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    {episode.libraryItemId ? (
+                      <SubtitleControls
+                        itemId={episode.libraryItemId}
+                        languages={subtitleLanguages}
+                        onRefresh={onRefreshSubtitle}
+                        onDelete={onDeleteSubtitle}
+                      />
+                    ) : null}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </details>
@@ -851,7 +943,15 @@ function MonitorSeasonList({
   );
 }
 
-function ImportSeasonList({ seasons }: { seasons: Array<[number, MediaLibraryItem[]]> }) {
+function ImportSeasonList({
+  seasons,
+  onRefreshSubtitle,
+  onDeleteSubtitle
+}: {
+  seasons: Array<[number, MediaLibraryItem[]]>;
+  onRefreshSubtitle: (itemId: string, language?: string) => void;
+  onDeleteSubtitle: (itemId: string, language: string) => void;
+}) {
   return (
     <div className="space-y-4">
       {seasons.map(([seasonNumber, items]) => (
@@ -859,12 +959,20 @@ function ImportSeasonList({ seasons }: { seasons: Array<[number, MediaLibraryIte
           <summary className="cursor-pointer list-none px-4 py-4 text-lg font-semibold">Season {String(seasonNumber).padStart(2, "0")}</summary>
           <div className="grid gap-2 border-t px-4 py-4 sm:grid-cols-2 xl:grid-cols-3">
             {items.sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0)).map((item) => (
-              <div key={item.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
-                <span className="min-w-0 truncate font-medium">
-                  E{String(item.episode ?? 0).padStart(2, "0")}
-                  {item.episodeTitle ? ` - ${item.episodeTitle}` : ""}
-                </span>
-                <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] font-bold text-emerald-200">Available</span>
+              <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-medium">
+                    E{String(item.episode ?? 0).padStart(2, "0")}
+                    {item.episodeTitle ? ` - ${item.episodeTitle}` : ""}
+                  </span>
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] font-bold text-emerald-200">Available</span>
+                </div>
+                <SubtitleControls
+                  itemId={item.id}
+                  languages={item.subtitleLanguages ?? []}
+                  onRefresh={onRefreshSubtitle}
+                  onDelete={onDeleteSubtitle}
+                />
               </div>
             ))}
           </div>
@@ -884,6 +992,40 @@ function episodeStatusClass(status: RequestMonitor["seasons"][number]["episodes"
   if (status === "available") return "bg-[#22c55e]/20 text-[#b2f5c2]";
   if (status === "downloading") return "bg-[#8b5cf6]/20 text-[#d5c2ff]";
   return "bg-[#ff5b5b]/20 text-[#ffc2c2]";
+}
+
+function SubtitleControls({
+  itemId,
+  languages,
+  onRefresh,
+  onDelete
+}: {
+  itemId: string;
+  languages: string[];
+  onRefresh: (itemId: string, language?: string) => void;
+  onDelete: (itemId: string, language: string) => void;
+}) {
+  const normalized = [...new Set(languages.map((language) => language.toUpperCase()))].sort();
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+      <span>Subs:</span>
+      {normalized.length === 0 ? <span className="text-muted-foreground">none</span> : null}
+      {normalized.map((language) => (
+        <span key={language} className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2 py-0.5 text-cyan-100">
+          {language}
+          <button type="button" className="text-cyan-200/80 hover:text-red-200" title={`Remove ${language} subtitle`} onClick={() => onDelete(itemId, language)}>
+            x
+          </button>
+          <button type="button" className="text-cyan-200/80 hover:text-white" title={`Get other ${language} subtitle`} onClick={() => onRefresh(itemId, language)}>
+            refresh
+          </button>
+        </span>
+      ))}
+      <button type="button" className="rounded-full border border-white/10 px-2 py-0.5 text-cyan-100 hover:bg-white/10" onClick={() => onRefresh(itemId)}>
+        Get subs
+      </button>
+    </div>
+  );
 }
 
 function InfoBox({ label, value }: { label: string; value: string }) {
